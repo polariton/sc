@@ -1,0 +1,87 @@
+
+Download & update
+=================
+
+Project page at Sourceforge:
+  http://sourceforge.net/projects/sc-tool/
+
+Source code repository:
+  http://sc-tool.hg.sourceforge.net/hgweb/sc-tool/
+
+
+Installation
+============
+
+1. Install Perl 5 interpreter and the following modules: 
+AppConfig, Getopt::Long, DBI, DBD-module for your database (DBD::mysql,
+DBD::sqlite, etc), Pod::Usage.
+
+a. Installation from repository of your Linux distribution (recommended way)
+
+Example:
+  apt-get install perl-doc perl-modules libdbi-perl libdbd-sqlite3-perl \
+    libappconfig-perl
+
+b. Installation from CPAN:
+  cpan DBI DBD::SQLite DBD::Mysql Pod::Usage AppConfig
+
+2. Install fresh iproute2 suite that supports "flow" classifier.
+
+3. Install iptables.
+
+4. Install ipset (http://ipset.netfilter.org/).
+
+5. Install sc.
+  cp sc /usr/local/sbin
+  mkdir /etc/sc
+  cp sc.conf /etc/sc
+
+If you want to create shaping rules at startup and clear them at shutdown, you
+should prepare init script. sc comes with such script that works in Debian.
+To install it just type
+  cp sc.init /etc/init.d/sc
+
+and don't forget to update rc.d symlinks.
+  update-rc.d sc defaults
+
+
+Configuration
+=============
+
+1. Database settings
+
+By default, sc uses local SQLite database /etc/sc/sc.db, but it can use any
+other DBI-compatible database like MySQL, PostgreSQL or Oracle.  Edit database
+queries that produce correct output sc can read. It is assumed that
+IP-addresses and bandwidth rates are stored as integer numbers. Default rate
+unit is 1 Kibit/s = 1024 bit/s. IP-addresses must differ in two last octets,
+because they are used for deterministic mapping to a tc classid's. Octets and
+classids are related by the following equation:
+
+classid = third_octet * 0x100 + fourth_octet + 1
+
+Example: for 172.16.1.12 address we have classid = 10d.
+
+If you plan to use your shaper with SQLite database, you need to
+create it and add some data.
+
+Example:
+sc dbcreate
+sc dbadd 172.16.0.1 10Mibit
+sc dbadd 172.16.0.2 20Mibit
+
+
+2. Synchronization with database
+
+To perform synchronization of shaping rules with database you should add
+a corresponding line to your crontab file. In the following example
+synchronization of rules will be performed every 10 minutes.
+
+*/10 * * * * root /usr/local/sbin/sc sync
+
+
+3. Syslog
+
+sc can log it's errors and warnings through syslog. To turn on this
+feature, set the "syslog" option to 1 in /etc/sc/sc.conf.
+

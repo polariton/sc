@@ -1,0 +1,215 @@
+#===============================================================================
+#
+#         FILE:  sc.conf.pod
+#
+#  DESCRIPTION:  Source for sc.conf(5) manpage
+#
+#       AUTHOR:  Stanislav Kruchinin, <stanislav.krucinin@gmail.com>
+#      CREATED:  04/11/09
+#     REVISION:  1
+#===============================================================================
+
+
+=head1 NAME
+
+B<sc.conf> - configuration file for sc(8).
+
+=head1 DESCRIPTION
+
+The file F<sc.conf> contains configuration information for shaper control tool
+sc(8).
+
+The sc.conf is parsed using C<AppConfig> module and has a simple "variable =
+value" form. The file may contain extra tabs and newlines for formatting.
+Comments begin with the B<#> character and end at the end of line, just like
+in shell or Perl scripts. File that comes with sc(8) is well commented and
+clear.
+
+=head1 OPTIONS
+
+=over
+
+=item B<iptables>, B<tc> and B<ipset>
+
+Location of iptables(8), tc(8) and ipset(8) executables.
+
+=item B<out_if>, B<in_if>
+
+Names of interfaces that will be used for shaping of output and input traffic,
+respectively.
+
+=item B<debug>
+
+Debug modes.
+Default value: 0.
+Possible values:
+
+=over 4
+
+=item * 0 - no debug (default value),
+
+=item * 1 - print command line that caused error,
+
+=item * 2 - just print command line without execution.
+
+=back
+
+=item B<verbose>
+
+Message verbosity level.
+Default value: 0.
+Boolean.
+
+=item B<joint>
+
+Perform add, change and delete operation on rules and database by a single command.
+
+=item B<set_name>
+
+Name of set with allowed IP's. Default value: pass
+
+=item B<set_type>
+
+Type of set.
+Default value: iphash.
+Possible values:
+
+=over
+
+=item * ipmap - stores IP's from single /16 network (very fast).
+=item * iphash - stores IP's from different /16 networks.
+
+=back
+
+=item network = 172.16.0.0/16
+
+Network and mask for ipmap set
+
+=item B<set_size>
+
+Size of IP hash for ipset(8).
+Default value: 65536. 
+Possible values: from 1 to 65536.
+
+=item B<chain>
+
+Name of iptables(8) chain that will contain rules for shaped IP's.
+Default value: FORWARD.
+For names other than FORWARD the new chain will be created and
+attached to FORWARD chain.
+
+=item B<quantum>
+
+Amount of bytes a stream is allowed to dequeue before the next queue gets a
+turn.
+Default value: 1500.
+Possible values: >= MTU.
+
+=item B<rate_unit>
+
+Default rate unit.
+Default value: kibit.
+Possible values: all unit names understood by tc(8).
+
+=item B<leaf_qdisc>
+
+Leaf queueing discipline with parameters. Used as tail of tc(8) command
+line for creation of rules.
+Default value: 'pfifo limit 50'.
+Possible values: all classless qdiscs supported by tc(8).
+
+=item B<db_host>
+
+Database host.
+Default value: 127.0.0.1
+Possible values: IP-address or domain name.
+
+=item B<db_driver>
+
+Database driver.
+Default value: sqlite
+Possible values: all database drivers supported by Perl DBI module.
+
+=item B<db_user>
+
+Username to use when connecting to database.
+Default value: user.
+Possible values: depends on database server.
+
+=item B<db_pass>
+
+The password to use when connecting to database. Remember that specifying a password on the
+command line is insecure.
+Default value: password.
+Possible values: arbitrary string.
+
+=item B<db_name>
+
+Database name to use.
+Default value: sc.db.
+Possible values: arbibrary string (should be a valid filename in case of SQLite driver).
+
+=item B<Database queries>
+
+
+=over
+
+=item * query_create - create database.
+
+=item * query_load - select all data from database.
+
+=item * query_list - select data for one IP.
+
+=item * query_add - add new entry.
+
+=item * query_del - delete existing entry.
+
+=item * query_change - modify existing entry.
+
+=back
+
+=item B<syslog>
+
+Output errors and warnings to syslog.
+Default value: 1.
+Possible values: boolean.
+
+=item B<syslog_options>
+
+syslog options.
+Default value: empty string.
+Possible values (comma-separated):
+
+=over
+
+=item * ndelay - open the connection immediately
+
+=item * nofatal - just emit warnings instead of dying if the connection to syslog can't be established
+
+=item * perror - write the message to standard error output as well to the syslog
+
+=item * pid - include PID with each message
+
+=back
+
+=item B<syslog_facility>
+
+syslog facility.
+Default value: user.
+Possible values: see Sys::Syslog(3).
+
+=back
+
+=head1 SEE ALSO
+
+sc(8), App::Config(3), Sys::Syslog(3), syslog(3), tc(8), iptables(8),
+ipset(8).
+
+=head1 AUTHOR
+
+sc(8) is written by Stanislav Kruchinin <stanislav.kruchinin@gmail.com>.
+
+=cut
+
+# vim:set syntax=pod:
+

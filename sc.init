@@ -1,0 +1,64 @@
+#!/bin/sh
+
+### BEGIN INIT INFO
+# Provides:		sc
+# Required-Start:	$remote_fs $syslog
+# Required-Stop:	$remote_fs $syslog
+# Default-Start:	2 3 4 5
+# Default-Stop:		1
+# Short-Description:	Shaper Control Tool
+### END INIT INFO
+
+set -e
+
+# /etc/init.d/sc: init script for Shaper Control Tool
+
+SC=/usr/local/sbin/sc
+test -x $SC || exit 0
+
+if test -f /etc/default/sc; then
+    . /etc/default/sc
+fi
+
+. /lib/lsb/init-functions
+
+if [ -n "$2" ]; then
+    SC_OPTS="$SC_OPTS $2"
+fi
+
+case "$1" in
+  start)
+	log_daemon_msg "Loading shaping rules" "sc"
+	if $SC $SC_OPTS load ; then
+	    log_end_msg 0
+	else
+	    log_end_msg 1
+	fi
+	;;
+
+  stop)
+	log_daemon_msg "Deleting shaping rules" "sc"
+	if $SC $SC_OPTS reset ; then
+	    log_end_msg 0
+	else
+	    log_end_msg 1
+	fi
+	;;
+
+  restart|reload|force-reload)
+	log_daemon_msg "Reloading shaping rules" "sc"
+	if $SC $SC_OPTS reload ; then
+	    log_end_msg 0
+	else
+	    log_end_msg 1
+	fi
+	;;
+
+  status)
+	$SC $SC_OPTS status
+	;;
+
+  *)
+	log_action_msg "Usage: /etc/init.d/sc {start|stop|reload|force-reload|restart|status}"
+	exit 1
+esac

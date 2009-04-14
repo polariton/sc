@@ -2,12 +2,12 @@
 # Makefile for sc
 #
 
-PROG:=sc
+PROG=sc
 MANDIR?=/usr/local/share/man
 DESTDIR?=/usr/local/sbin
 INITDIR?=/etc/init.d
+CFGDIR=/etc/sc
 CLFILES?=sc.8.gz sc.conf.5.gz
-
 
 help:
 	@echo "Targets:"
@@ -27,6 +27,13 @@ sc.conf.5.gz: sc sc.conf.pod
 install: sc.conf.5.gz sc.8.gz
 	cp -f sc.8.gz $(MANDIR)/man8
 	cp -f sc.conf.5.gz $(MANDIR)/man5
+	mkdir -p /etc/sc
+	if [ -f $(CFGDIR)/sc.conf ];\
+	then \
+		cp -f sc.conf $(CFGDIR)/sc.conf.default ;\
+	else \
+		cp sc.conf $(CFGDIR) ;\
+	fi
 	cp -f sc $(DESTDIR)
 	cp -f sc.init /etc/init.d/sc
 

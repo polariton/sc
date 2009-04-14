@@ -5,8 +5,9 @@ Download & update
 Project page at Sourceforge:
   http://sourceforge.net/projects/sc-tool/
 
-Source code repository:
+Source code repositories:
   http://sc-tool.hg.sourceforge.net/hgweb/sc-tool/
+  http://mercurial.intuxication.org/hg/sc/
 
 
 Installation
@@ -50,25 +51,26 @@ Configuration
 
 1. Database settings
 
-By default, sc uses local SQLite database /etc/sc/sc.db, but it can use any
-other DBI-compatible database like MySQL, PostgreSQL or Oracle.  Edit database
-queries that produce correct output sc can read. It is assumed that
-IP-addresses and bandwidth rates are stored as integer numbers. Default rate
-unit is 1 Kibit/s = 1024 bit/s. IP-addresses must differ in two last octets,
-because they are used for deterministic mapping to a tc classid's. Octets and
-classids are related by the following equation:
+By default, sc uses SQLite database /etc/sc/sc.db, but it can use any other
+DBI-compatible database like MySQL, PostgreSQL or Oracle. You must enter
+database queries that will produce correct output for sc. It is assumed that
+IP-addresses and bandwidth rates are stored as integer numbers (see
+query_create value). Default and recommended rate unit is 1 Kibit/s = 1024
+bit/s. IP-addresses must differ in two last octets, because they are used for
+deterministic mapping to a tc classid's. Octets and classids are related by
+the following equation:
 
-classid = third_octet * 0x100 + fourth_octet + 1
+  classid = third_octet * 0x100 + fourth_octet + 1
 
 Example: for 172.16.1.12 address we have classid = 10d.
 
-If you plan to use your shaper with SQLite database, you need to
-create it and add some data.
+If you plan to use shaper with it's own SQLite database, you need to create it
+and add some data.
 
 Example:
-sc dbcreate
-sc dbadd 172.16.0.1 10Mibit
-sc dbadd 172.16.0.2 20Mibit
+  sc dbcreate
+  sc dbadd 172.16.0.1 10Mibit
+  sc dbadd 172.16.0.2 20Mibit
 
 
 2. Synchronization with database

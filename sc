@@ -16,9 +16,9 @@ use AppConfig;
 my $cfg_file = '/etc/sc/sc.conf';
 
 # Location of executables
-my $iptables = 'iptables';
-my $tc = 'tc';
-my $ipset = 'ipset';
+my $iptables = '/sbin/iptables';
+my $tc = '/sbin/tc';
+my $ipset = '/usr/local/sbin/ipset';
 
 # Database host
 my $db_host = '127.0.0.1';
@@ -238,24 +238,24 @@ my %cmdd = (
 	},
 );
 
-# data rate units transformation coefficients
+# rate unit transformation coefficients
 my %units = (
 # bit-based
-	'b|bit' => 1,
-	'kb|kbit|Kbit' =>         1_000,
-	'mb|mbit|Mbit' =>     1_000_000,
-	'gb|gbit|Gbit' => 1_000_000_000,
-	'kib|kibit|Kibit' =>         1_024,
-	'mib|mibit|Mibit' =>     1_048_576,
-	'gib|gibit|Gibit' => 1_073_741_824,
+	'bit' => 1,
+	'kibit|Kibit' => 1024,
+	'kbit|Kbit'   => 1000,
+	'mibit|Mibit' => 1024*1024,
+	'mbit|Mbit'   => 1_000_000,
+	'gibit|Gibit' => 1024*1024*1024,
+	'gbit|Gbit'   => 1_000_000_000,
 # byte-based
-	'B|Byte' => 8,
-	'kB|KB|kByte|KByte' =>    8_000,
-	'mB|MB|MByte' =>     8_000_000,
-	'gB|GB|GByte' => 8_000_000_000,
-	'kiB|KiB|kiByte|KiByte' =>         8_192,
-	'miB|MiB|miByte|MiByte' =>     8_388_608,
-	'giB|GiB|giByte|GiByte' => 8_589_934_592,
+	'bps|Bps'         => 8,
+	'kib|kibps|KiBps' => 8*1024,
+	'kb|kbps|KBps'    => 8_000,
+	'mib|mibps|MiBps' => 8*1024*1024,
+	'mb|mbps|MBps'    => 8_000_000,
+	'gib|gibps|GiBps' => 8*1024*1024*1024,
+	'gb|gbps|GBps'    => 8_000_000_000,
 );
 
 # Error codes
@@ -298,11 +298,11 @@ my %optd = (
 	'q|quantum=s' => \$quantum,
 	'u|rate_unit=s' => \$rate_unit,
 	'leaf_qdisc=s' => \$leaf_qdisc,
-	'R|db_driver=s' => \$db_driver,
-	'H|db_host=s' => \$db_host,
-	'D|db_name=s' => \$db_name,
-	'U|db_user=s' => \$db_user,
-	'P|db_pass=s' => \$db_pass,
+	'db_driver=s' => \$db_driver,
+	'db_host=s' => \$db_host,
+	'db_name=s' => \$db_name,
+	'db_user=s' => \$db_user,
+	'db_pass=s' => \$db_pass,
 	'query_create=s' => \$query_create,
 	'query_load=s' => \$query_load,
 	'query_list=s' => \$query_list,
@@ -324,23 +324,27 @@ my ($TC_H, $IPS_H);
 my $tc_ptr = \&tc_sys;
 my $ips_ptr = \&ips_sys;
 
-# process configuration file
-my @args = keys %optd;
-my @cargs = @args;
-
 ##############################################################################
 # Main routine
 
-my $cfg = AppConfig->new({ CASE => 1 });
+if (-T $cfg_file) {
+	# process configuration file
+	my @args = keys %optd;
+	my @cargs = @args;
 
-$cfg->define(@args);
-$cfg->file($cfg_file);
+	my $cfg = AppConfig->new({ CASE => 1 });
 
-# prepare list of configuration file parameters and get their values
-for my $i (0..$#cargs) {
-	$cargs[$i] =~ s/^\w+\|//ixms;
-	$cargs[$i] =~ s/[=!].*$//ixms;
-	${ $optd{ $args[$i] } } = $cfg->get( $cargs[$i] );
+	$cfg->define(@args);
+	$cfg->file($cfg_file);
+	# prepare list of configuration file parameters and get their values
+	for my $i (0..$#cargs) {
+		$cargs[$i] =~ s/^\w+\|//ixms;
+		$cargs[$i] =~ s/[=!+].*$//ixms;
+		${ $optd{ $args[$i] } } = $cfg->get( $cargs[$i] );
+	}
+}
+else {
+	log_carp("unable to read configuration file $cfg_file");
 }
 
 # get options from command line
@@ -664,7 +668,7 @@ sub rul_change
 
 sub rul_load
 {
-	my ($ip, $classid, $ceil);
+	my ($ip, $classid, $rate);
 	my $ret = 0;
 
 	open my $TCH, '-|', "$tc class show dev $out_if"
@@ -673,9 +677,9 @@ sub rul_load
 	close $TCH;
 	foreach (@tcout) {
 		if (/leaf\ (\w+):\ .* rate\ (\w+)/ixms) {
-			($classid, $ceil) = ($1, $2);
-			$ceil = rate_cvt($ceil, $rate_unit);
-			$rul_data{$classid}{'rate'} = $ceil;
+			($classid, $rate) = ($1, $2);
+			$rate = rate_cvt($rate, $rate_unit);
+			$rul_data{$classid}{'rate'} = $rate;
 		}
 	}
 
@@ -821,36 +825,49 @@ sub ips_batch
 	return
 }
 
-sub batch_start
+sub tc_batch_start
 {
 	if ($debug == $DEBUG_PRINT) {
-		open $TC_H, '>', "tc.out"
+		open $TC_H, '>', "tc.batch"
 			or log_croak("unable to open tc.out");
-		open $IPS_H, '>', "ipset.out"
-			or log_croak("unable to open ipset.out");
 	}
 	else {
 		open $TC_H, '|-', "$tc -batch"
 			or log_croak("unable to create pipe for $tc");
+	}
+
+	$tc_ptr = \&tc_batch;
+
+	return $TC_H;
+}
+
+sub ipset_batch_start
+{
+	if ($debug == $DEBUG_PRINT) {
+		open $IPS_H, '>', "ipset.batch"
+			or log_croak("unable to open ipset.out");
+	}
+	else {
 		open $IPS_H, '|-', "$ipset --restore"
 			or log_croak("unable to create pipe for $ipset");
 	}
 
-	$tc_ptr = \&tc_batch;
 	$ips_ptr = \&ips_batch;
 
-	return;
+	return $IPS_H;
 }
 
-sub batch_stop
+sub tc_batch_stop
 {
 	$tc_ptr = \&tc_sys;
-	$ips_ptr = \&ips_sys;
+	return close $TC_H;
+}
 
-	close $TC_H or log_carp("unable to close pipe");
+sub ipset_batch_stop
+{
+	$ips_ptr = \&ips_sys;
 	print $IPS_H "COMMIT\n";
-	close $IPS_H or log_carp("unable to close pipe");
-	return;
+	return close $IPS_H;
 }
 
 sub db_load
@@ -1124,9 +1141,9 @@ sub cmd_status
 		or log_croak("unable to open pipe for $tc");
 	@out = <$PIPE>;
 	close $PIPE;
-	if ($out[0] =~ /^qdisc htb/ms) {
+	if ($out[0] =~ /^qdisc\ htb/xms) {
 		my @lqd = split /\ /ixms, $leaf_qdisc;
-		if ($out[1] =~ /^qdisc $lqd[0]/ms) {
+		if ($out[1] =~ /^qdisc\ $lqd[0]/xms) {
 			print "$PROG: shaping rules were successfully created\n";
 		}
 		else {
@@ -1166,14 +1183,16 @@ sub cmd_load
 	my $ret = $E_OK;
 	
 	$loading = 1;
-	batch_start();
+	tc_batch_start();
+	ipset_batch_start();
 	tc_ipset_init();
 	db_load();
 	foreach my $cid (keys %db_data) {
 		my $r = $db_data{$cid}{'rate'};
 		rul_add($db_data{$cid}{'ip'}, $cid, "$r$rate_unit");
 	}
-	batch_stop();
+	tc_batch_stop();
+	ipset_batch_stop();
 
 	ipt_init();
 	$loading = 0;
@@ -1481,7 +1500,7 @@ Network (used for ipmap set type)
 
 Size of quantum for child queues
 
-=item B<-u> unit, B<--rate_unit> unit
+=item B<-u>, B<--rate_unit> unit
 
 Rate unit used by B<sc>
 
@@ -1489,23 +1508,23 @@ Rate unit used by B<sc>
 
 Leaf qdisc and parameters
 
-=item B<-R>, B<--db_driver> name
+=item B<--db_driver> name
 
 Database driver
 
-=item B<-H>, B<--db_host> host:port
+=item B<--db_host> host:port
 
 Host of database server address or hostname
 
-=item B<-D>, B<--db_name> name
+=item B<--db_name> name
 
 Database name to use
 
-=item B<-U>, B<--db_user> name
+=item B<--db_user> name
 
 Database username
 
-=item B<-P>, B<--db_pass> password
+=item B<--db_pass> password
 
 Database password
 

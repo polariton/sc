@@ -3,11 +3,14 @@
 #
 
 PROG=sc
+ARCH=$(PROG).tar.bz2
+
 MANDIR?=/usr/local/share/man
 DESTDIR?=/usr/local/sbin
 INITDIR?=/etc/init.d
 CFGDIR=/etc/sc
-CLFILES?=sc.8.gz sc.conf.5.gz
+
+CLFILES?=sc.8.gz sc.conf.5.gz $(ARCH)
 
 help:
 	@echo "Targets:"
@@ -39,4 +42,7 @@ install: sc.conf.5.gz sc.8.gz
 
 clean:
 	rm -f $(CLFILES)
+
+srcdist:
+	@hg archive -t tbz2 -X .hgignore -X .hg_archival.txt $(ARCH)
 

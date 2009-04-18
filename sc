@@ -152,7 +152,7 @@ my %cmdd = (
 	'help' => {
 		'handler' => \&cmd_help,
 		'par' => q{},
-		'desc' => 'Show help',
+		'desc' => 'Show manpage',
 		'priv' => 0,
 	},
 	'init' => {
@@ -160,12 +160,6 @@ my %cmdd = (
 		'par' => '',
 		'desc' => 'Initialization of firewall and QoS rules',
 		'priv' => 1,
-	},
-	'man' => {
-		'handler' => \&cmd_man,
-		'par' => q{},
-		'desc' => 'Show man page',
-		'priv' => 0,
 	},
 	'sync' => {
 		'handler' => \&cmd_sync,
@@ -839,7 +833,7 @@ sub usage
 
 	print $usage_preamble;
 	print_cmds();
-	print "\nUse \"$PROG help\" to show aliases and global options\n\n";
+	print "\nUse \"$PROG help\" to show aliases and options\n\n";
 	exit $RET;
 }
 
@@ -1062,12 +1056,6 @@ sub cmd_change
 	return rul_change($ip, ip_classid($ip), $rate);
 }
 
-sub cmd_man
-{
-	pod2usage(-exitstatus => 0, -verbose => 2);
-	return $E_OK;
-}
-
 sub cmd_show
 {
 	my @ips = @_;
@@ -1205,9 +1193,7 @@ sub cmd_ver
 
 sub cmd_help
 {
-	print "$VERSTR\n\n";
-	pod2usage({ -exitstatus => $E_OK, -verbose => 99,
-		-sections => "SYNOPSIS|COMMANDS|OPTIONS" });
+	pod2usage({ -exitstatus => 0, -verbose => 2 });
 	return $E_OK;
 }
 
@@ -1370,9 +1356,13 @@ supported by Perl B<DBI> module.
 =head2 Details of realization
 
 B<sc> uses B<flow> classifier that allows deterministic mapping of keys to
-classes. Number of B<tc> classes is limited by 0xffff, so it is natural to use
-two last octets of IP-address as a hash key. Traffic classification always
-takes a constant amount of time regardless of number of IP's you have.
+classes. IP-addresses must differ in two last octets, because they are used
+for deterministic mapping to a tc classid's. Octets and classids are related
+by the following equation:
+
+  classid = third_octet * 0x100 + fourth_octet + 1
+
+Example: for 172.16.1.12 address classid is 10d.
 
 =head1 PREREQUISITES
 
@@ -1442,9 +1432,9 @@ List database entries
 
 Delete rules for given IP
 
-=item B<help> [command]
+=item B<help>
 
-Show help
+Show manpage
 
 =item B<init>
 
@@ -1457,10 +1447,6 @@ List rules in human-readable form
 =item B<load>
 
 Load IP's and rates from database and create ruleset
-
-=item B<man>
-
-Show man page
 
 =item B<reload>
 

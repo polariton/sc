@@ -22,7 +22,7 @@ my $ipset = '/usr/local/sbin/ipset';
 
 # Database host
 my $db_host = '127.0.0.1';
-# Database driver (possible values: mysql, pgsql, sqlite)
+# Database driver (possible values: mysql, Pg, sqlite)
 my $db_driver = 'sqlite';
 # Username
 my $db_user = 'username';
@@ -76,8 +76,11 @@ my $rate_unit = 'kibit';
 # Classless leaf qdisc and parameters
 my $leaf_qdisc = 'pfifo limit 50';
 
-# Message verbosity
+# Display additional messages
 my $verbose = 0;
+
+# Suppress output
+my $quiet = 0;
 
 # Debug level
 my $DEBUG_OFF   = 0; # no debug output
@@ -137,7 +140,7 @@ my %cmdd = (
 		'handler' => \&cmd_del,
 		'dbhandler' => \&cmd_dbdel,
 		'par' => '<ip>',
-		'desc' => 'Delete rules by IP',
+		'desc' => 'Delete rules for given IP',
 		'priv' => 1,
 	},
 	'list|ls' => {
@@ -154,8 +157,8 @@ my %cmdd = (
 	},
 	'init' => {
 		'handler' => \&cmd_init,
-		'par' => '[netmask]',
-		'desc' => 'Initialize firewall and QoS subsystem',
+		'par' => '',
+		'desc' => 'Initialization of firewall and QoS rules',
 		'priv' => 1,
 	},
 	'man' => {
@@ -175,6 +178,12 @@ my %cmdd = (
 		'par' => q{},
 		'desc' => 'Load rules from database',
 		'priv' => 1,
+	},
+	'ratecvt' => {
+		'handler' => \&cmd_ratecvt,
+		'par' => '<rate> <unit>',
+		'desc' => 'Convert rate unit',
+		'priv' => 0,
 	},
 	'reload|restart' => {
 		'handler' => \&cmd_reload,
@@ -233,7 +242,7 @@ my %cmdd = (
 	'dbcreate' => {
 		'handler' => \&cmd_dbcreate,
 		'par' => q{},
-		'desc' => 'Create table with IP and rate columns',
+		'desc' => 'Create database and table',
 		'priv' => 0,
 	},
 );
@@ -295,7 +304,8 @@ my %optd = (
 	'set_type=s' => \$set_type,
 	'set_size=s' => \$set_size,
 	'N|network=s' => \$network,
-	'q|quantum=s' => \$quantum,
+	'quantum=s' => \$quantum,
+	'q|quiet!' => \$quiet,
 	'u|rate_unit=s' => \$rate_unit,
 	'leaf_qdisc=s' => \$leaf_qdisc,
 	'db_driver=s' => \$db_driver,
@@ -327,6 +337,7 @@ my $ips_ptr = \&ips_sys;
 ##############################################################################
 # Main routine
 
+# read configuration file
 if (-T $cfg_file) {
 	# process configuration file
 	my @args = keys %optd;
@@ -375,7 +386,7 @@ exit $RET;
 sub main
 {
 	my @argv = @_;
-	
+
 	if ($batch) {
 		GetOptionsFromArray(\@argv, %optd) or return $E_PARAM;
 	}
@@ -431,7 +442,7 @@ sub is_ip
 {
 	my $ip = shift;
 
-	if ($ip =~ /^(\d+)\.(\d+)\.(\d+)\.(\d+)/ixms) {
+	if ($ip =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})/ixms) {
 		if ($1 >  0 && $1 <  255 && $2 >= 0 && $2 <= 255 &&
 			$3 >= 0 && $3 <= 255 && $4 >= 0 && $4 <  255) {
 			return $ip;
@@ -445,17 +456,28 @@ sub is_rate
 	my $rate = shift;
 	my $result = 0;
 
-	if ($rate =~ /^(\d+)$/ixms) {
-		$result = $rate . $rate_unit;
-	}
-	else {
-		foreach my $u (keys %units) {
-			if ($rate =~ /^\d+($u)$/xms) {
-				$result = $rate;
-				last;
+	my ($num, $unit);
+	
+	if ($rate =~ /^(\d+)([A-Za-z]*)$/xms) {
+		$num = $1;
+		$unit = $2;
+		return 0 if $num == 0;
+		if (nonempty($unit)) {
+			foreach my $u (keys %units) {
+				if ($unit =~ /^($u)$/xms) {
+					$result = $rate;
+					last;
+				}
 			}
 		}
+		else {
+			$result = $num . $rate_unit;
+		}
 	}
+	else {
+		return 0;
+	}
+
 	return $result;
 }
 
@@ -495,11 +517,11 @@ sub ip_texttoint
 {
 	my $ip = shift;
 	my @oct = split /\./ixms, $ip;
-	my $r = 0;
+	my $int = 0;
 	for my $i (0..3) {
-		$r += $oct[$i]*2**(8*(3-$i));
+		$int += $oct[$i]*2**(8*(3-$i));
 	}
-	return $r;
+	return $int;
 }
 
 # convert IP from int to text form
@@ -509,8 +531,9 @@ sub ip_inttotext
 	my @oct;
 
 	for my $i (0..3) {
-		$oct[$i] = int($int/2**(8*(3-$i)));
-		$int %= 2**(8*(3-$i));
+		my $div = 2**(8*(3-$i));
+		$oct[$i] = int($int/$div);
+		$int %= $div;
 	}
 
 	return "$oct[0]\.$oct[1]\.$oct[2]\.$oct[3]";
@@ -551,7 +574,9 @@ sub log_carp
 {
 	my $msg = shift;
 	log_syslog('warn', $msg) if $syslog;
-	carp "$PROG: $msg";
+	if (!$quiet) {
+		carp "$PROG: $msg";
+	} 
 	return $!;
 }
 
@@ -560,7 +585,12 @@ sub log_croak
 {
 	my $msg = shift;
 	log_syslog('err', $msg) if $syslog;
-	croak "$PROG: $msg";
+	if ($quiet) {
+		exit $!;
+	}
+	else {
+		croak "$PROG: $msg";
+	}
 }
 
 # warn with logging
@@ -581,9 +611,14 @@ sub sys
 		print "$c\n";
 	}
 	else {
-		system "$c";
+		if ($quiet) {
+			system "$c >/dev/null 2>&1";
+		}
+		else {
+			system "$c";
+		}
 	}
-	if ($? && $debug == $DEBUG_ON) {
+	if ($? && $debug == $DEBUG_ON && !$quiet) {
 		print "$c\n";
 	}
 
@@ -757,14 +792,12 @@ sub round
 sub rate_cvt
 {
 	my ($rate, $du) = @_;
-	my ($num, $s_key, $d_key);
+	my ($num, $unit, $s_key, $d_key);
 
-	log_croak("$PROG: rate is undefined") if !defined $rate;
-	return "$rate$rate_unit" if $rate =~ /^\d+$/ixms;
-
-	if ($rate =~ /^(\d+)(\w+)$/xms) {
+	if ($rate =~ /^(\d+)(\w*)$/xms) {
 		$num = $1;
-		my $unit = $2;
+		$unit = nonempty($2) ? $2 : $rate_unit;
+		return $rate if $unit eq $rate_unit;
 		foreach my $u (keys %units) {
 			if ($unit =~ /^($u)$/xms) {
 				$s_key = $u;
@@ -775,7 +808,7 @@ sub rate_cvt
 	else {
 		log_croak("invalid rate specified");
 	}
-	log_croak("invalid rate unit specified") if !defined $s_key;
+	log_croak("invalid source unit specified") if !defined $s_key;
 
 	foreach my $u (keys %units) {
 		if ($du =~ /^($u)$/xms) {
@@ -783,10 +816,21 @@ sub rate_cvt
 			last;
 		}
 	}
-	log_croak("invalid target unit specified") if !defined $d_key;
+	log_croak("invalid destination unit specified") if !defined $d_key;
 
 	my $dnum = round($num*$units{$s_key}/$units{$d_key});
 	return "$dnum$du";
+}
+
+sub cmd_ratecvt
+{
+	my ($rate, $unit) = @_;
+	my $result;
+	log_croak("rate is undefined") if !defined $rate;
+	log_croak("destination unit is undefined") if !defined $unit;
+
+	$result = rate_cvt($rate, $unit);
+	print "$result\n";
 }
 
 sub usage
@@ -902,9 +946,6 @@ sub db_load
 
 sub tc_ipset_init
 {
-	my $cidr = shift;
-	my $divisor = 65536;
-
 	# root qdiscs
 	$tc_ptr->("qdisc add dev $out_if root handle 1: htb");
 	$tc_ptr->("qdisc add dev $in_if root handle 1: htb");
@@ -1108,21 +1149,21 @@ sub cmd_sync
 			$del++;
 			next;
 		}
+		my $db_rate = "$db_data{$dcid}{'rate'}$rate_unit";
 		# add new entries
 		if (!defined $rul_data{$dcid}) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "+ $ip\n" if $verbose;
-			rul_add($ip, $dcid, "$db_data{$dcid}{'rate'}$rate_unit");
+			rul_add($ip, $dcid, $db_rate);
 			$add++;
 			next;
 		}
 		# change if rate in database is different
-		my $rul_rate = rate_cvt($rul_data{$dcid}{'rate'}, $rate_unit);
-		my $db_rate = "$db_data{$dcid}{'rate'}$rate_unit";
+		my $rul_rate = $rul_data{$dcid}{'rate'};
 		if ($rul_rate ne $db_rate) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "* $ip $rul_rate -> $db_rate\n" if $verbose;
-			rul_change($ip, $dcid, "$db_data{$dcid}{'rate'}$rate_unit");
+			rul_change($ip, $dcid, $db_rate);
 			$chg++;
 		}
 		else {
@@ -1165,7 +1206,7 @@ sub cmd_ver
 sub cmd_help
 {
 	print "$VERSTR\n\n";
-	pod2usage({ -exitstatus => $E_OK, -verbose => 99, 
+	pod2usage({ -exitstatus => $E_OK, -verbose => 99,
 		-sections => "SYNOPSIS|COMMANDS|OPTIONS" });
 	return $E_OK;
 }
@@ -1181,7 +1222,7 @@ sub cmd_dbcreate
 sub cmd_load
 {
 	my $ret = $E_OK;
-	
+
 	$loading = 1;
 	tc_batch_start();
 	ipset_batch_start();
@@ -1385,6 +1426,10 @@ Add database entry
 
 Change database entry
 
+=item B<dbcreate>
+
+Create database and table
+
 =item B<dbdel | dbrm> <ip>
 
 Delete database entry
@@ -1395,7 +1440,7 @@ List database entries
 
 =item B<del | rm> <ip>
 
-Delete rules by IP
+Delete rules for given IP
 
 =item B<help> [command]
 
@@ -1403,7 +1448,7 @@ Show help
 
 =item B<init>
 
-Initialize firewall and QoS subsystem
+Initialization of firewall and QoS rules. Only for manual rule editing.
 
 =item B<list | ls> [ip]
 
@@ -1411,7 +1456,7 @@ List rules in human-readable form
 
 =item B<load>
 
-Load rules from database
+Load IP's and rates from database and create ruleset
 
 =item B<man>
 
@@ -1423,7 +1468,7 @@ Delete all rules and load from database
 
 =item B<reset>
 
-Delete all sc-related rules
+Delete all shaping rules
 
 =item B<show> [ip]
 
@@ -1458,7 +1503,7 @@ Debugging level (from 0 to 2)
 
 =item B<-v>, B<--verbose>
 
-Enable verbose output
+Enable additional output
 
 =item B<-S>, B<--syslog>
 
@@ -1496,7 +1541,11 @@ Size of IP set (up to 65536)
 
 Network (used for ipmap set type)
 
-=item B<-q>, B<--quantum> size
+=item B<-q>, B<--quiet>
+
+Suppress output
+
+=item B<--quantum> size
 
 Size of quantum for child queues
 

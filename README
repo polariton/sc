@@ -54,13 +54,8 @@ DBI-compatible database like MySQL, PostgreSQL or Oracle. You must enter
 database queries that will produce correct output for sc. It is assumed that
 IP-addresses and bandwidth rates are stored as integer numbers (see
 query_create value). Default and recommended rate unit is 1 Kibit/s = 1024
-bit/s. IP-addresses must differ in two last octets, because they are used for
-deterministic mapping to a tc classid's. Octets and classids are related by
-the following equation:
-
-  classid = third_octet * 0x100 + fourth_octet + 1
-
-Example: for 172.16.1.12 address classid = 10d.
+bit/s. Remember that IP-addresses must differ in two last octets, because they
+are used for deterministic mapping to a tc classid's.
 
 If you plan to use shaper with it's own SQLite database, you need to create it
 and add some data.

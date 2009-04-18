@@ -33,13 +33,11 @@ b. Installation from CPAN:
 4. Install ipset (http://ipset.netfilter.org/).
 
 5. Install sc.
-  cp sc /usr/local/sbin
-  mkdir /etc/sc
-  cp sc.conf /etc/sc
+  make install
 
 If you want to create shaping rules at startup and clear them at shutdown, you
-should prepare init script. sc comes with such script that works in Debian.
-To install it just type
+should prepare init script. sc comes with such script for Debian-based
+distributions. To install it just type
   cp sc.init /etc/init.d/sc
 
 and don't forget to update rc.d symlinks.
@@ -62,7 +60,7 @@ the following equation:
 
   classid = third_octet * 0x100 + fourth_octet + 1
 
-Example: for 172.16.1.12 address we have classid = 10d.
+Example: for 172.16.1.12 address classid = 10d.
 
 If you plan to use shaper with it's own SQLite database, you need to create it
 and add some data.

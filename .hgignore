@@ -1,0 +1,6 @@
+syntax: glob
+*.sh
+*.gz
+*.bz2
+old
+

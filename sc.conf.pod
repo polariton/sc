@@ -1,13 +1,12 @@
-#===============================================================================
+#=============================================================================
 #
 #         FILE:  sc.conf.pod
 #
 #  DESCRIPTION:  Source for sc.conf(5) manpage
 #
 #       AUTHOR:  Stanislav Kruchinin, <stanislav.krucinin@gmail.com>
-#      CREATED:  04/11/09
-#     REVISION:  1
-#===============================================================================
+#
+#=============================================================================
 
 
 =head1 NAME
@@ -22,8 +21,7 @@ sc(8).
 The sc.conf is parsed using C<AppConfig> module and has a simple "variable =
 value" form. The file may contain extra tabs and newlines for formatting.
 Comments begin with the B<#> character and end at the end of line, just like
-in shell or Perl scripts. File that comes with sc(8) is well commented and
-clear.
+in shell or Perl scripts.
 
 =head1 OPTIONS
 
@@ -31,7 +29,7 @@ clear.
 
 =item B<iptables>, B<tc> and B<ipset>
 
-Location of iptables(8), tc(8) and ipset(8) executables.
+Location of iptables(8), tc(8) and ipset(8) executables, respectively.
 
 =item B<out_if>, B<in_if>
 
@@ -50,7 +48,7 @@ Possible values:
 
 =item * 1 - print command line that caused error,
 
-=item * 2 - just print command line without execution.
+=item * 2 - print command line without execution.
 
 =back
 
@@ -60,9 +58,16 @@ Message verbosity level.
 Default value: 0.
 Boolean.
 
+=item B<quiet>
+
+Suppress output. Does not affect messages caused by C<verbose> flag.
+Default value: 0.
+Boolean.
+
 =item B<joint>
 
-Perform add, change and delete operation on rules and database by a single command.
+Perform add, change and delete operation on rules and database by a single
+command.
 
 =item B<set_name>
 
@@ -71,25 +76,29 @@ Name of set with allowed IP's. Default value: pass
 =item B<set_type>
 
 Type of set.
-Default value: iphash.
+Default value: ipmap.
 Possible values:
 
 =over
 
-=item * ipmap - stores IP's from single /16 network (very fast).
-=item * iphash - stores IP's from different /16 networks.
+=item * C<ipmap> - stores IP's from one /16 network defined by C<network>
+parameter (memory cheap and very fast).
+
+=item * C<iphash> - stores IP's from arbitrary /16 networks.
 
 =back
 
-=item network = 172.16.0.0/16
+=item B<network>
 
-Network and mask for ipmap set
+Network for ipmap set.
+Default value: 172.16.0.0/16
+Possible values: any network with mask value between 16-31
 
 =item B<set_size>
 
 Size of IP hash for ipset(8).
-Default value: 65536. 
-Possible values: from 1 to 65536.
+Default value: 65536.
+Possible values: from 1024 to 65536.
 
 =item B<chain>
 
@@ -109,7 +118,7 @@ Possible values: >= MTU.
 
 Default rate unit.
 Default value: kibit.
-Possible values: all unit names understood by tc(8).
+Possible values: see sc(8).
 
 =item B<leaf_qdisc>
 
@@ -138,8 +147,8 @@ Possible values: depends on database server.
 
 =item B<db_pass>
 
-The password to use when connecting to database. Remember that specifying a password on the
-command line is insecure.
+The password to use when connecting to database. Remember that specifying a
+password on the command line is insecure.
 Default value: password.
 Possible values: arbitrary string.
 
@@ -147,26 +156,42 @@ Possible values: arbitrary string.
 
 Database name to use.
 Default value: sc.db.
-Possible values: arbibrary string (should be a valid filename in case of SQLite driver).
+Possible values: arbibrary string (should be a valid filename in case of
+SQLite driver).
 
 =item B<Database queries>
 
+Default values of queries are used for handling SQLite database
+F</etc/sc/sc.db>.
 
-=over
+=over 16
 
-=item * query_create - create database.
+=item B<query_create> 
 
-=item * query_load - select all data from database.
+create table with C<ip> and C<rate> columns.
 
-=item * query_list - select data for one IP.
+=item B<query_load> 
 
-=item * query_add - add new entry.
+select all data from table.
 
-=item * query_del - delete existing entry.
+=item B<query_list>
 
-=item * query_change - modify existing entry.
+select data for one IP.
+
+=item B<query_add> 
+
+add new entry.
+
+=item B<query_del>
+
+delete existing entry.
+
+=item B<query_change>
+
+modify existing entry.
 
 =back
+
 
 =item B<syslog>
 
@@ -180,15 +205,24 @@ syslog options.
 Default value: empty string.
 Possible values (comma-separated):
 
-=over
+=over 12
 
-=item * ndelay - open the connection immediately
+=item B<ndelay>
 
-=item * nofatal - just emit warnings instead of dying if the connection to syslog can't be established
+open the connection immediately
 
-=item * perror - write the message to standard error output as well to the syslog
+=item B<nofatal>
 
-=item * pid - include PID with each message
+just emit warnings instead of dying if the connection to syslog can't be
+established
+
+=item B<perror>
+
+write the message to standard error output as well to the syslog
+
+=item B<pid>
+
+include PID with each message
 
 =back
 
@@ -196,7 +230,7 @@ Possible values (comma-separated):
 
 syslog facility.
 Default value: user.
-Possible values: see Sys::Syslog(3).
+Possible values: see Sys::Syslog(3), section C<Facilities>.
 
 =back
 
@@ -207,7 +241,7 @@ ipset(8).
 
 =head1 AUTHOR
 
-sc(8) is written by Stanislav Kruchinin <stanislav.kruchinin@gmail.com>.
+Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 =cut
 

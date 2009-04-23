@@ -1,3 +1,4 @@
+Shaper Control Tool Readme
 
 Download & update
 =================
@@ -13,18 +14,22 @@ Source code repositories:
 Installation
 ============
 
-1. Install Perl 5 interpreter and the following modules: 
+0. Install Linux kernel that supports "flow" classifier (2.6.25 or higher,
+with option CONFIG_NET_CLS_FLOW=m or y).
+
+1. Install Perl 5 and the following modules: 
 AppConfig, Getopt::Long, DBI, DBD-module for your database (DBD::mysql,
-DBD::sqlite, etc), Pod::Usage.
+DBD::SQLite, etc), Pod::Usage.
 
-a. Installation from repository of your Linux distribution (recommended way)
+  a. Installation from package repository of your Linux distribution
+     (recommended way).
 
-Example:
-  apt-get install perl-doc perl-modules libdbi-perl libdbd-sqlite3-perl \
-    libappconfig-perl
+     Example for Debian:
+       apt-get install perl-doc perl-modules libdbi-perl libdbd-sqlite3-perl \
+       libappconfig-perl
 
-b. Installation from CPAN:
-  cpan DBI DBD::SQLite DBD::Mysql Pod::Usage AppConfig
+  b. Installation of non-core modules from CPAN.
+    cpan DBI DBD::SQLite Pod::Usage AppConfig
 
 2. Install fresh iproute2 suite that supports "flow" classifier.
 
@@ -49,13 +54,13 @@ Configuration
 
 1. Database settings
 
-By default, sc uses SQLite database /etc/sc/sc.db, but it can use any other
-DBI-compatible database like MySQL, PostgreSQL or Oracle. You must enter
-database queries that will produce correct output for sc. It is assumed that
-IP-addresses and bandwidth rates are stored as integer numbers (see
-query_create value). Default and recommended rate unit is 1 Kibit/s = 1024
-bit/s. Remember that IP-addresses must differ in two last octets, because they
-are used for deterministic mapping to a tc classid's.
+By default, sc uses SQLite database at /etc/sc/sc.db, but it can use any other
+DBI-compatible database like MySQL, PostgreSQL or Oracle. You must configure
+database driver and SQL-queries that will produce correct output for sc. It is
+assumed that IP-addresses and bandwidth rates are stored as integer numbers
+(see query_create value). Default and recommended rate unit is 1 Kibit/s =
+1024 bit/s. Remember that IP-addresses must differ in two last octets, because
+they are used for deterministic mapping to a tc classid's.
 
 If you plan to use shaper with it's own SQLite database, you need to create it
 and add some data.
@@ -73,7 +78,6 @@ a corresponding line to your crontab file. In the following example
 synchronization of rules will be performed every 10 minutes.
 
 */10 * * * * root /usr/local/sbin/sc sync
-
 
 3. Syslog
 

@@ -10,28 +10,34 @@ use Sys::Syslog;
 use AppConfig;
 
 ##############################################################################
-# Configuration
+# Default values of configurable parameters
 #
 
 my $cfg_file = '/etc/sc/sc.conf';
 
-# Location of executables
 my $iptables = '/sbin/iptables';
 my $tc = '/sbin/tc';
 my $ipset = '/usr/local/sbin/ipset';
 
-# Database host
-my $db_host = '127.0.0.1';
-# Database driver (possible values: mysql, Pg, sqlite)
+my $DEBUG_OFF   = 0; # no debug output
+my $DEBUG_ON    = 1; # print command line that caused error
+my $DEBUG_PRINT = 2; # print all commands instead of executing them
+my $debug = $DEBUG_OFF;
+
+my $verbose = 0;
+my $quiet = 0;
+my $batch = 0;
+my $joint = 0;
+
+my $out_if = 'eth0';
+my $in_if = 'eth1';
+
 my $db_driver = 'sqlite';
-# Username
+my $db_host = '127.0.0.1';
 my $db_user = 'username';
-# Password
 my $db_pass = 'password';
-# Database name
 my $db_name = 'sc.db';
 
-# Database queries
 my $query_create = "CREATE TABLE rates (ip INTEGER PRIMARY KEY, ".
                    "rate INTEGER NOT NULL)";
 my $query_load = "SELECT ip, rate FROM rates";
@@ -40,85 +46,32 @@ my $query_add = "INSERT INTO rates VALUES (?, ?)";
 my $query_del = "DELETE FROM rates WHERE ip=?";
 my $query_change = "REPLACE INTO rates VALUES (?, ?)";
 
-# Perform database operations and rule editing simultaneously
-my $joint = 0;
-
-# Network interfaces
-my $out_if = 'eth2';
-my $in_if = 'eth1';
-# Network
-my $network = '172.16.0.0/16';
-
-# IPSet parameters
-#
-# Name of set with allowed IP's
 my $set_name = 'pass';
-
-# Type of set
-# ipmap - stores IP's from single /16 network (very fast).
-# iphash - stores IP's from different /16 networks.
 my $set_type = 'ipmap';
-
-# Set size
+my $network = '172.16.0.0/16';
 my $set_size = '65536';
 
-# Name of chain that will contain rules for shaped IP's
 my $chain_name = 'FORWARD';
-
-# Amount of bytes a stream is allowed to dequeue before the next queue gets a
-# turn. Defaults to 1 maximum sized packet (MTU-sized).
-# Don't set below the MTU!
 my $quantum = '1500';
-
-# Default rate unit
 my $rate_unit = 'kibit';
-
-# Classless leaf qdisc and parameters
 my $leaf_qdisc = 'pfifo limit 50';
 
-# Display additional messages
-my $verbose = 0;
-
-# Suppress output
-my $quiet = 0;
-
-# Debug level
-my $DEBUG_OFF   = 0; # no debug output
-my $DEBUG_ON    = 1; # print command line that caused error
-my $DEBUG_PRINT = 2; # print all commands instead of executing them
-
-my $debug = $DEBUG_OFF;
-
-# Batch mode (sc reads commands from pipe or STDIN)
-my $batch = 0;
-
-# Loading mode
-my $loading = 0;
-
-# Output errors and warnings to syslog
 my $syslog = 0;
-
-# syslog options (comma-separated)
-#
-# ndelay - open the connection immediately
-# nofatal - just emit warnings instead of dying if the connection to syslog
-#           can't be established
-# perror - write the message to standard error output as well to the syslog
-# pid - include PID with each message
 my $syslog_options = q{};
-
-# syslog facility
 my $syslog_facility = 'user';
 
 ## end of configuration
 
 ##############################################################################
-# Global variables and constants
+# Internal variables and constants
 #
 
 my $PROG = 'sc';
 my $VERSION = '0.5.0';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
+
+# Loading flag
+my $loading = 0;
 
 # command dispatch table
 my %cmdd = (
@@ -451,7 +404,7 @@ sub is_rate
 	my $result = 0;
 
 	my ($num, $unit);
-	
+
 	if ($rate =~ /^(\d+)([A-Za-z]*)$/xms) {
 		$num = $1;
 		$unit = $2;
@@ -538,7 +491,7 @@ sub db_connect
 {
 	my $dbh;
 
-	if ($db_driver eq "sqlite") {
+	if ($db_driver =~ /sqlite/ixms) {
 		$dbh = DBI->connect(
 			"DBI:SQLite:${db_name}",
 			$db_user, $db_pass, { 'RaiseError' => 1, AutoCommit => 1 }
@@ -547,7 +500,7 @@ sub db_connect
 	else {
 		$dbh = DBI->connect(
 			"DBI:${db_driver}:dbname=$db_name;host=$db_host",
-			$db_user, $db_pass, { 'RaiseError' => 1 }
+			$db_user, $db_pass, { 'RaiseError' => 1, AutoCommit => 1 }
 		);
 	}
 
@@ -570,7 +523,7 @@ sub log_carp
 	log_syslog('warn', $msg) if $syslog;
 	if (!$quiet) {
 		carp "$PROG: $msg";
-	} 
+	}
 	return $!;
 }
 
@@ -612,7 +565,7 @@ sub sys
 			system "$c";
 		}
 	}
-	if ($? && $debug == $DEBUG_ON && !$quiet) {
+	if ($? && $debug == $DEBUG_ON) {
 		print "$c\n";
 	}
 
@@ -635,10 +588,12 @@ sub rul_add
 	my $ret = 0;
 
 	$tc_ptr->(
-		"class add dev $out_if parent 1: classid 1:$classid htb rate $rate ceil $ceil quantum $quantum"
+		"class add dev $out_if parent 1: classid 1:$classid htb rate $rate ".
+		"ceil $ceil quantum $quantum"
 	);
 	$tc_ptr->(
-		"class add dev $in_if parent 1: classid 1:$classid htb rate $rate ceil $ceil quantum $quantum"
+		"class add dev $in_if parent 1: classid 1:$classid htb rate $rate ".
+		"ceil $ceil quantum $quantum"
 	);
 
 	$tc_ptr->(
@@ -686,10 +641,12 @@ sub rul_change
 	}
 
 	$tc_ptr->(
-		"class change dev $out_if parent 1:0 classid 1:$classid htb rate $rate ceil $ceil quantum $quantum"
+		"class change dev $out_if parent 1:0 classid 1:$classid htb ".
+		"rate $rate ceil $ceil quantum $quantum"
 	);
 	$tc_ptr->(
-		"class change dev $in_if parent 1:0 classid 1:$classid htb rate $rate ceil $ceil quantum $quantum"
+		"class change dev $in_if parent 1:0 classid 1:$classid htb ".
+		"rate $rate ceil $ceil quantum $quantum"
 	);
 
 	return $?;
@@ -717,7 +674,7 @@ sub rul_load
 	my @ipsout = <$IPH>;
 	close $IPH;
 	foreach (@ipsout) {
-		next unless /^\d+\.\d+\.\d+\.\d+/ixms;
+		next unless /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/ixms;
 		chomp;
 		$ip = $_;
 		$classid = ip_classid($ip);
@@ -946,10 +903,12 @@ sub tc_ipset_init
 
 	# filters
 	$tc_ptr->(
-		"filter add dev $out_if parent 1:0 protocol ip handle 1 pref 2 flow map key src and 0xffff"
+		"filter add dev $out_if parent 1:0 protocol ip handle 1 pref 2 ".
+		"flow map key src and 0xffff"
 	);
 	$tc_ptr->(
-		"filter add dev $in_if parent 1:0 protocol ip handle 1 pref 2 flow map key dst and 0xffff"
+		"filter add dev $in_if parent 1:0 protocol ip handle 1 pref 2 ".
+		"flow map key dst and 0xffff"
 	);
 
 	# create iphash and rules for allowed IP's
@@ -1308,7 +1267,7 @@ sub cmd_dblist
 		my $sth = $dbh->prepare($query_list);
 		$sth->execute($intip);
 		while (my $ref = $sth->fetchrow_arrayref()) {
-			($intip, $rate) = @{$ref};
+			($intip, $rate) = @$ref;
 			printf "%-15s  %10s\n", $ip, $rate . $rate_unit;
 		}
 		$sth->finish();
@@ -1388,7 +1347,7 @@ tc(8), iptables(8) and ipset(8).
 =over 8
 
 =item B<Flow> traffic classifier (option B<CONFIG_NET_CLS_FLOW>=m or y,
-requieres kernel version 2.6.25 or above).
+requires kernel version 2.6.25 or above).
 
 =item B<IPSet> modules (see L<http://ipset.netfilter.org/>).
 
@@ -1584,6 +1543,71 @@ C<sc change 172.16.0.1 20Mibit>
 =item Delete class for 172.16.0.1
 
 C<sc del 172.16.0.1>
+
+=back
+
+=head1 RATE UNITS
+
+All rates should be specified as integer numbers, possibly followed
+by a unit.
+
+=over 22
+
+=item bit
+
+bit per second
+
+=item kibit, Kibit or a bare number
+
+kibibit per second 
+
+=item kbit or Kbit
+
+kilobit per second
+
+=item mibit or Mibit
+
+mibibit per second
+
+=item mbit or Mbit
+
+megabit per second
+
+=item gibit or Gibit
+
+gibibit per second
+
+=item gbit or Gbit
+
+gigabit per second
+
+=item bps or Bps
+
+byte per second
+
+=item kib, kibps or KiBps
+
+kibibyte per second
+
+=item kb, kbps or KBps
+
+kilobyte per second
+
+=item mib, mibps or MiBps
+
+mibibyte per second
+
+=item mb, mbps or MBps
+
+megabyte per second
+
+=item gib, gibps or GiBps
+
+gibibyte per second
+
+=item gb, gbps or GBps
+
+gigabyte per second
 
 =back
 

@@ -105,7 +105,7 @@ my %cmdd = (
 	'help' => {
 		'handler' => \&cmd_help,
 		'par' => q{},
-		'desc' => 'Show manpage',
+		'desc' => 'Show help and list available database drivers',
 		'priv' => 0,
 	},
 	'init' => {
@@ -1151,7 +1151,12 @@ sub cmd_ver
 
 sub cmd_help
 {
-	pod2usage({ -exitstatus => 0, -verbose => 2 });
+	print "$VERSTR\n\n";
+	pod2usage({ -exitstatus => "NOEXIT", -verbose => 99,
+		-sections => "SYNOPSIS|COMMANDS|OPTIONS", -output => \*STDOUT });
+	print "Available database drivers:\n";
+	print map "    $_\n", DBI->available_drivers;
+	print "\n";
 	return $E_OK;
 }
 

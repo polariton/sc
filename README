@@ -3,10 +3,14 @@ Shaper Control Tool Readme
 Download & update
 =================
 
+Project page at BitBucket:
+  http://bitbucket.org/sky/sc/
+
 Project page at Sourceforge:
   http://sourceforge.net/projects/sc-tool/
 
 Source code repositories:
+  http://bitbucket.org/sky/sc/src/
   http://sc-tool.hg.sourceforge.net/hgweb/sc-tool/
   http://mercurial.intuxication.org/hg/sc/
 
@@ -14,8 +18,8 @@ Source code repositories:
 Installation
 ============
 
-0. Install Linux kernel that supports "flow" classifier (2.6.25 or higher,
-with option CONFIG_NET_CLS_FLOW=m or y).
+0. Install Linux kernel that supports "flow" classifier (version 2.6.25 or
+higher, with option CONFIG_NET_CLS_FLOW=m or y).
 
 1. Install Perl 5 and the following modules: 
 AppConfig, Getopt::Long, DBI, DBD-module for your database (DBD::mysql,
@@ -81,6 +85,6 @@ synchronization of rules will be performed every 10 minutes.
 
 3. Syslog
 
-sc can log it's errors and warnings through syslog. To turn on this
+sc can log errors and warnings through syslog. To turn on this
 feature, set the "syslog" option to 1 in /etc/sc/sc.conf.
 

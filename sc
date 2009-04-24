@@ -790,7 +790,6 @@ sub usage
 
 	print $usage_preamble;
 	print_cmds();
-	print "\nUse \"$PROG help\" to show aliases and options\n\n";
 	exit $RET;
 }
 

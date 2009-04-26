@@ -76,10 +76,15 @@ my $loading = 0;
 # command dispatch table
 my %cmdd = (
 	'add' => {
+		# handler (points to function that performs action)
 		'handler' => \&cmd_add,
+		# database handler (optional)
 		'dbhandler' => \&cmd_dbadd,
+		# parameters (optional)
 		'par' => '<ip> <rate>',
+		# command description
 		'desc' => 'Add rules',
+		# requires root privilege (optional)
 		'priv' => 1,
 	},
 	'change|mod' => {
@@ -104,25 +109,21 @@ my %cmdd = (
 	},
 	'help' => {
 		'handler' => \&cmd_help,
-		'par' => q{},
 		'desc' => 'Show help and list available database drivers',
 		'priv' => 0,
 	},
 	'init' => {
 		'handler' => \&cmd_init,
-		'par' => '',
 		'desc' => 'Initialization of firewall and QoS rules',
 		'priv' => 1,
 	},
 	'sync' => {
 		'handler' => \&cmd_sync,
-		'par' => q{},
 		'desc' => 'Synchronize rules with database',
 		'priv' => 1,
 	},
 	'load|start' => {
 		'handler' => \&cmd_load,
-		'par' => q{},
 		'desc' => 'Load rules from database',
 		'priv' => 1,
 	},
@@ -134,13 +135,11 @@ my %cmdd = (
 	},
 	'reload|restart' => {
 		'handler' => \&cmd_reload,
-		'par' => q{},
 		'desc' => 'Delete all rules and load from database',
 		'priv' => 1,
 	},
 	'reset|stop' => {
 		'handler' => \&cmd_reset,
-		'par' => q{},
 		'desc' => 'Delete all sc-related rules',
 		'priv' => 1,
 	},
@@ -152,13 +151,11 @@ my %cmdd = (
 	},
 	'status' => {
 		'handler' => \&cmd_status,
-		'par' => q{},
 		'desc' => 'Show status of rules',
 		'priv' => 1,
 	},
 	'version' => {
 		'handler' => \&cmd_ver,
-		'par' => q{},
 		'desc' => 'Show version',
 		'priv' => 0,
 	},
@@ -188,7 +185,6 @@ my %cmdd = (
 	},
 	'dbcreate' => {
 		'handler' => \&cmd_dbcreate,
-		'par' => q{},
 		'desc' => 'Create database and table',
 		'priv' => 0,
 	},
@@ -238,39 +234,39 @@ EOF
 
 # options dispatch table for AppConfig and Getopt::Long
 my %optd = (
-	'b|batch' => \$batch,
-	'j|joint' => \$joint,
-	'v|verbose!' => \$verbose,
-	'd|debug=i' => \$debug,
-	'S|syslog' => \$syslog,
-	'f|config=s' => \$cfg_file,
-	'o|out_if=s' => \$out_if,
-	'i|in_if=s' => \$in_if,
-	'c|chain=s' => \$chain_name,
-	's|set_name=s' => \$set_name,
-	'set_type=s' => \$set_type,
-	'set_size=s' => \$set_size,
-	'N|network=s' => \$network,
-	'quantum=s' => \$quantum,
-	'q|quiet!' => \$quiet,
-	'u|rate_unit=s' => \$rate_unit,
-	'leaf_qdisc=s' => \$leaf_qdisc,
-	'db_driver=s' => \$db_driver,
-	'db_host=s' => \$db_host,
-	'db_name=s' => \$db_name,
-	'db_user=s' => \$db_user,
-	'db_pass=s' => \$db_pass,
-	'query_create=s' => \$query_create,
-	'query_load=s' => \$query_load,
-	'query_list=s' => \$query_list,
-	'query_add=s' => \$query_add,
-	'query_del=s' => \$query_del,
-	'query_change=s' => \$query_change,
-	'syslog_options' => \$syslog_options,
+	'b|batch'           => \$batch,
+	'j|joint'           => \$joint,
+	'v|verbose!'        => \$verbose,
+	'd|debug=i'         => \$debug,
+	'S|syslog'          => \$syslog,
+	'f|config=s'        => \$cfg_file,
+	'o|out_if=s'        => \$out_if,
+	'i|in_if=s'         => \$in_if,
+	'c|chain=s'         => \$chain_name,
+	's|set_name=s'      => \$set_name,
+	'set_type=s'        => \$set_type,
+	'set_size=s'        => \$set_size,
+	'N|network=s'       => \$network,
+	'quantum=s'         => \$quantum,
+	'q|quiet!'          => \$quiet,
+	'u|rate_unit=s'     => \$rate_unit,
+	'leaf_qdisc=s'      => \$leaf_qdisc,
+	'db_driver=s'       => \$db_driver,
+	'db_host=s'         => \$db_host,
+	'db_name=s'         => \$db_name,
+	'db_user=s'         => \$db_user,
+	'db_pass=s'         => \$db_pass,
+	'query_create=s'    => \$query_create,
+	'query_load=s'      => \$query_load,
+	'query_list=s'      => \$query_list,
+	'query_add=s'       => \$query_add,
+	'query_del=s'       => \$query_del,
+	'query_change=s'    => \$query_change,
+	'syslog_options'    => \$syslog_options,
 	'syslog_facility=s' => \$syslog_facility,
-	'iptables=s' => \$iptables,
-	'tc=s' => \$tc,
-	'ipset=s' => \$ipset,
+	'iptables=s'        => \$iptables,
+	'tc=s'              => \$tc,
+	'ipset=s'           => \$ipset,
 );
 
 my %db_data;
@@ -656,7 +652,7 @@ sub rul_load
 	open my $TCH, '-|', "$tc class show dev $out_if"
 		or log_croak("unable to open pipe for $tc");
 	my @tcout = <$TCH>;
-	close $TCH;
+	close $TCH or log_carp("unable to close pipe for $tc");
 	foreach (@tcout) {
 		if (/leaf\ (\w+):\ .* rate\ (\w+)/ixms) {
 			($classid, $rate) = ($1, $2);
@@ -666,9 +662,9 @@ sub rul_load
 	}
 
 	open my $IPH, '-|', "$ipset -nsL $set_name" or
-		log_croak("unable to start $ipset");
+		log_croak("unable to open pipe for $ipset");
 	my @ipsout = <$IPH>;
-	close $IPH;
+	close $IPH or log_carp("unable to close pipe for $ipset");
 	foreach (@ipsout) {
 		next unless /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/ixms;
 		chomp;
@@ -697,7 +693,7 @@ sub print_rule
 	foreach my $c (@cmds) {
 		open $LIST, '-|', $c or log_croak("unable to open pipe for $c");
 		push @out, <$LIST>;
-		close $LIST;
+		close $LIST or log_croak("unable to close pipe for $c");
 	}
 	if (@out) {
 		print "$comment\n" if nonempty($comment);
@@ -778,6 +774,7 @@ sub cmd_ratecvt
 
 	$result = rate_cvt($rate, $unit);
 	print "$result\n";
+	return $E_OK;
 }
 
 sub usage
@@ -786,6 +783,7 @@ sub usage
 
 	print $usage_preamble;
 	print_cmds();
+	print "\n";
 	exit $RET;
 }
 
@@ -1123,7 +1121,7 @@ sub cmd_status
 	open my $PIPE, '-|', "$tc qdisc show dev $out_if | head -2"
 		or log_croak("unable to open pipe for $tc");
 	@out = <$PIPE>;
-	close $PIPE;
+	close $PIPE or log_croak("unable to close pipe for $tc");
 	if ($out[0] =~ /^qdisc\ htb/xms) {
 		my @lqd = split /\ /ixms, $leaf_qdisc;
 		if ($out[1] =~ /^qdisc\ $lqd[0]/xms) {
@@ -1155,7 +1153,7 @@ sub cmd_help
 		pod2usage({ -exitstatus => "NOEXIT", -verbose => 99,
 			-sections => "SYNOPSIS|COMMANDS|OPTIONS", -output => \*STDOUT });
 		print "Available database drivers:\n";
-		print map "    $_\n", DBI->available_drivers;
+		print map { "    $_\n" } DBI->available_drivers;
 		print "\n";
 	}
 	return $E_OK;
@@ -1272,7 +1270,7 @@ sub cmd_dblist
 		my $sth = $dbh->prepare($query_list);
 		$sth->execute($intip);
 		while (my $ref = $sth->fetchrow_arrayref()) {
-			($intip, $rate) = @$ref;
+			($intip, $rate) = @{$ref};
 			printf "%-15s  %10s\n", $ip, $rate . $rate_unit;
 		}
 		$sth->finish();

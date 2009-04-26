@@ -205,13 +205,13 @@ my %units = (
 	'gibit|Gibit' => 1024*1024*1024,
 	'gbit|Gbit'   => 1_000_000_000,
 # byte-based
-	'bps|Bps'         => 8,
-	'kib|kibps|KiBps' => 8*1024,
-	'kb|kbps|KBps'    => 8_000,
-	'mib|mibps|MiBps' => 8*1024*1024,
-	'mb|mbps|MBps'    => 8_000_000,
-	'gib|gibps|GiBps' => 8*1024*1024*1024,
-	'gb|gbps|GBps'    => 8_000_000_000,
+	'bps|Bps'     => 8,
+	'kibps|KiBps' => 8*1024,
+	'kbps|KBps'   => 8_000,
+	'mibps|MiBps' => 8*1024*1024,
+	'mbps|MBps'   => 8_000_000,
+	'gibps|GiBps' => 8*1024*1024*1024,
+	'gbps|GBps'   => 8_000_000_000,
 );
 
 # Error codes
@@ -236,7 +236,7 @@ Usage: $PROG [options] command <arguments>
 EOF
 ;
 
-# options dispatch table
+# options dispatch table for AppConfig and Getopt::Long
 my %optd = (
 	'b|batch' => \$batch,
 	'j|joint' => \$joint,
@@ -486,7 +486,6 @@ sub ip_inttotext
 	return "$oct[0]\.$oct[1]\.$oct[2]\.$oct[3]";
 }
 
-# connect to database
 sub db_connect
 {
 	my $dbh;
@@ -516,7 +515,6 @@ sub log_syslog
 	return $!;
 }
 
-# carp with logging
 sub log_carp
 {
 	my $msg = shift;
@@ -527,7 +525,6 @@ sub log_carp
 	return $!;
 }
 
-# croak with logging
 sub log_croak
 {
 	my $msg = shift;
@@ -540,7 +537,6 @@ sub log_croak
 	}
 }
 
-# warn with logging
 sub log_warn
 {
 	my $msg = shift;
@@ -1563,53 +1559,53 @@ bit per second
 
 =item kibit, Kibit or a bare number
 
-kibibit per second 
+kibibit per second (1024)
 
 =item kbit or Kbit
 
-kilobit per second
+kilobit per second (1000)
 
 =item mibit or Mibit
 
-mibibit per second
+mebibit per second (1 048 576)
 
 =item mbit or Mbit
 
-megabit per second
+megabit per second (10^6)
 
 =item gibit or Gibit
 
-gibibit per second
+gibibit per second (1 073 741 824)
 
 =item gbit or Gbit
 
-gigabit per second
+gigabit per second (10^9)
 
 =item bps or Bps
 
 byte per second
 
-=item kib, kibps or KiBps
+=item kibps or KiBps
 
 kibibyte per second
 
-=item kb, kbps or KBps
+=item kbps or KBps
 
 kilobyte per second
 
-=item mib, mibps or MiBps
+=item mibps or MiBps
 
 mibibyte per second
 
-=item mb, mbps or MBps
+=item mbps or MBps
 
 megabyte per second
 
-=item gib, gibps or GiBps
+=item gibps or GiBps
 
 gibibyte per second
 
-=item gb, gbps or GBps
+=item gbps or GBps
 
 gigabyte per second
 

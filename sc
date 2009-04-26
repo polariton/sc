@@ -1147,12 +1147,17 @@ sub cmd_ver
 
 sub cmd_help
 {
-	print "$VERSTR\n\n";
-	pod2usage({ -exitstatus => "NOEXIT", -verbose => 99,
-		-sections => "SYNOPSIS|COMMANDS|OPTIONS", -output => \*STDOUT });
-	print "Available database drivers:\n";
-	print map "    $_\n", DBI->available_drivers;
-	print "\n";
+	if ($verbose) {
+		pod2usage({ -exitstatus => 0, -verbose => 2 });
+	}
+	else {
+		print "$VERSTR\n\n";
+		pod2usage({ -exitstatus => "NOEXIT", -verbose => 99,
+			-sections => "SYNOPSIS|COMMANDS|OPTIONS", -output => \*STDOUT });
+		print "Available database drivers:\n";
+		print map "    $_\n", DBI->available_drivers;
+		print "\n";
+	}
 	return $E_OK;
 }
 

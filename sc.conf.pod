@@ -122,8 +122,8 @@ Possible values: see sc(8).
 
 =item B<leaf_qdisc>
 
-Leaf queueing discipline with parameters. Used as tail of tc(8) command
-line for creation of rules.
+Leaf queueing discipline with parameters. This string will be used as a tail
+of corresponding C<tc qdisc ...> command line.
 Default value: 'pfifo limit 50'.
 Possible values: all classless qdiscs supported by tc(8).
 
@@ -137,7 +137,8 @@ Possible values: IP-address or domain name.
 
 Database driver.
 Default value: sqlite
-Possible values: all database drivers supported by Perl DBI module.
+Possible values: all database drivers supported by Perl DBI module. See output
+of C<sc help> command for list of available drivers.
 
 =item B<db_user>
 

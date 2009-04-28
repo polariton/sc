@@ -84,7 +84,7 @@ my %cmdd = (
 		'par' => '<ip> <rate>',
 		# command description
 		'desc' => 'Add rules',
-		# requires root privilege (optional)
+		# check root privileges before execution (optional)
 		'priv' => 1,
 	},
 	'change|mod' => {
@@ -109,7 +109,7 @@ my %cmdd = (
 	},
 	'help' => {
 		'handler' => \&cmd_help,
-		'desc' => 'Show help and list available database drivers',
+		'desc' => 'Show help and available database drivers',
 		'priv' => 0,
 	},
 	'init' => {
@@ -135,12 +135,12 @@ my %cmdd = (
 	},
 	'reload|restart' => {
 		'handler' => \&cmd_reload,
-		'desc' => 'Delete all rules and load from database',
+		'desc' => 'Delete all rules and load data from database',
 		'priv' => 1,
 	},
 	'reset|stop' => {
 		'handler' => \&cmd_reset,
-		'desc' => 'Delete all sc-related rules',
+		'desc' => 'Delete all shaping rules',
 		'priv' => 1,
 	},
 	'show' => {
@@ -326,6 +326,37 @@ else {
 
 exit $RET;
 
+# autocompletion for commands
+sub acomp_cmd
+{
+	my $input = shift;
+	my @match;
+	my @ambig;
+
+	foreach my $key (keys %cmdd) {
+		my @cmds = split /\|/ixms, $key;
+		foreach my $a (@cmds) {
+			if ($a =~ /^$input/xms) {
+				push @match, $key;
+				push @ambig, $a;
+				last;
+			}
+		}
+	}
+	if ($#match == 0) {
+		return $match[0];
+	}
+	elsif ($#match > 0) {
+		log_warn("command \'$input\' is ambiguous:");
+		print STDERR "    @ambig\n";
+		return q{};
+	}
+	else {
+		log_warn("unknown command \'$input\'\n");
+		return;
+	}
+}
+
 sub main
 {
 	my @argv = @_;
@@ -334,40 +365,34 @@ sub main
 		GetOptionsFromArray(\@argv, %optd) or return $E_PARAM;
 	}
 
-	my $cmd = $argv[0];
+	usage($E_CMD) if !defined $argv[0];
+	my $cmd = acomp_cmd($argv[0]);
+	usage($E_CMD) if !defined $cmd;
+	return $E_CMD if $cmd eq q{};
+
 	shift @argv;
 
-	usage($E_CMD) if !defined $cmd;
+	if ($cmdd{$cmd}{'priv'} && !$debug && $>) {
+		log_warn("you must run this command with root privileges\n");
+		return $E_PRIV;
+	}
 
-	my $ucmd = 1;
-	foreach my $c (sort keys %cmdd) {
-		if ($cmd =~ /^($c)/ixms) {
-			if ($cmdd{$c}{'priv'} && !$debug && $>) {
-				log_warn("you must run this command with root privileges\n");
-				return $E_PRIV;
-			}
-			$RET = $cmdd{$c}{'handler'}->(@argv);
-			if ($RET == $E_NOTEXIST) {
-				log_carp("specified IP does not exist. Arguments: @argv");
-			}
-			if ($joint && defined $cmdd{$c}{'dbhandler'}) {
-				$RET = $cmdd{$c}{'dbhandler'}->(@argv);
-				if ($RET == $E_NOTEXIST) {
-					log_carp(
-						"database entry for specified IP does not exist. ".
-						"Arguments: @argv"
-					);
-				}
-			}
-			$ucmd = 0;
-			last;
+	$RET = $cmdd{$cmd}{'handler'}->(@argv);
+
+	if ($RET == $E_NOTEXIST) {
+		log_carp("specified IP does not exist. Arguments: @argv");
+	}
+
+	if ($joint && defined $cmdd{$cmd}{'dbhandler'}) {
+		$RET = $cmdd{$cmd}{'dbhandler'}->(@argv);
+		if ($RET == $E_NOTEXIST) {
+			log_carp(
+				"database entry for specified IP does not exist. ".
+				"Arguments: @argv"
+			);
 		}
 	}
 
-	if ($ucmd) {
-		log_warn("unknown command \'$cmd\'\n");
-		$RET = $E_CMD;
-	}
 	return $RET;
 }
 

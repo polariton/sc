@@ -1,9 +1,6 @@
-#
-# Makefile for sc
-#
-
 PROG=sc
-ARCH=$(PROG).tar.bz2
+VERSION=1.0.0
+ARCH=$(PROG)-$(VERSION).tar.bz2
 
 MANDIR?=/usr/local/share/man
 DESTDIR?=/usr/local/sbin
@@ -12,27 +9,27 @@ CFGDIR=/etc/sc
 
 CLFILES?=sc.8.gz sc.conf.5.gz $(ARCH)
 
-help:
-	@echo "Targets:"
-	@echo "  clean    Clean output files"
-	@echo "  install  Install script and manpages"
-	@echo "  man      Generate manual pages from POD-files"
-	@echo "  help     Show this message"
-
 man: sc.8.gz sc.conf.5.gz
 
-sc.8.gz:
-	@pod2man --section=8 --release=" " --center="Linux System Manager's Manual" sc | gzip > sc.8.gz
+sc.8.gz: sc
+	pod2man --section=8 --release=" " \
+		--center="Linux System Manager's Manual" $^ | gzip > $@
 
-sc.conf.5.gz: sc sc.conf.pod
-	@pod2man --section=5 --release=" " --center=" " sc.conf.pod | gzip > sc.conf.5.gz
+sc.conf.5.gz: sc.conf.pod
+	pod2man --section=5 --release=" " --center=" " $^ | gzip > $@
+
+help:
+	@echo "Targets:"
+	@echo "  clean    clean output files"
+	@echo "  install  install script and manpages"
+	@echo "  man      (default) generate manual pages from POD-files"
+	@echo "  help     show this message"
 
 install: sc.conf.5.gz sc.8.gz
 	cp -f sc.8.gz $(MANDIR)/man8
 	cp -f sc.conf.5.gz $(MANDIR)/man5
 	mkdir -p /etc/sc
-	if [ -f $(CFGDIR)/sc.conf ];\
-	then \
+	if [ -f $(CFGDIR)/sc.conf ]; then\
 		cp -f sc.conf $(CFGDIR)/sc.conf.default ;\
 	else \
 		cp sc.conf $(CFGDIR) ;\
@@ -44,5 +41,5 @@ clean:
 	rm -f $(CLFILES)
 
 srcdist:
-	@hg archive -t tbz2 -X .hgignore -X .hg_archival.txt $(ARCH)
+	hg archive -t tbz2 -X .hgignore -X .hg_archival.txt $(ARCH)
 

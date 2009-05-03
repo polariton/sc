@@ -60,14 +60,12 @@ my $syslog = 0;
 my $syslog_options = q{};
 my $syslog_facility = 'user';
 
-## end of configuration
-
 ##############################################################################
 # Internal variables and constants
 #
 
 my $PROG = 'sc';
-my $VERSION = '0.5.0';
+my $VERSION = '1.0.0';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # Loading flag
@@ -373,7 +371,7 @@ sub main
 	shift @argv;
 
 	if ($cmdd{$cmd}{'priv'} && !$debug && $>) {
-		log_warn("you must run this command with root privileges\n");
+		log_warn("you must run this command with root privileges");
 		return $E_PRIV;
 	}
 

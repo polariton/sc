@@ -757,13 +757,13 @@ sub round
 
 sub rate_cvt
 {
-	my ($rate, $du) = @_;
+	my ($rate, $dst_unit) = @_;
 	my ($num, $unit, $s_key, $d_key);
 
-	if ($rate =~ /^(\d+)(\w*)$/xms) {
+	if ($rate =~ /^(\d+)([a-zA-Z]+)$/xms) {
 		$num = $1;
 		$unit = nonempty($2) ? $2 : $rate_unit;
-		return $rate if $unit eq $rate_unit;
+		return $rate if $unit eq $dst_unit;
 		foreach my $u (keys %units) {
 			if ($unit =~ /^($u)$/xms) {
 				$s_key = $u;
@@ -777,27 +777,15 @@ sub rate_cvt
 	log_croak("invalid source unit specified") if !defined $s_key;
 
 	foreach my $u (keys %units) {
-		if ($du =~ /^($u)$/xms) {
+		if ($dst_unit =~ /^($u)$/xms) {
 			$d_key = $u;
 			last;
 		}
 	}
 	log_croak("invalid destination unit specified") if !defined $d_key;
 
-	my $dnum = round($num*$units{$s_key}/$units{$d_key});
-	return "$dnum$du";
-}
-
-sub cmd_ratecvt
-{
-	my ($rate, $unit) = @_;
-	my $result;
-	log_croak("rate is undefined") if !defined $rate;
-	log_croak("destination unit is undefined") if !defined $unit;
-
-	$result = rate_cvt($rate, $unit);
-	print "$result\n";
-	return $E_OK;
+	my $dnum = round($num * $units{$s_key} / $units{$d_key});
+	return "$dnum$dst_unit";
 }
 
 sub usage
@@ -1303,6 +1291,18 @@ sub cmd_dblist
 	return $E_OK;
 }
 
+sub cmd_ratecvt
+{
+	my ($rate, $unit) = @_;
+	my $result;
+	log_croak("rate is undefined") if !defined $rate;
+	log_croak("destination unit is undefined") if !defined $unit;
+
+	$result = rate_cvt($rate, $unit);
+	print "$result\n";
+	return $E_OK;
+}
+
 __END__
 
 =head1 NAME
@@ -1645,12 +1645,11 @@ F</etc/sc/sc.db>. See sc.conf(5) for details.
 =head1 BUGS AND LIMITATIONS
 
 Due to deterministic mapping of IP's to classid's B<sc> works
-only with IP's that is distinguished by last two octets.
+only with IP's that have different last two octets.
 
 =head1 SEE ALSO
 
-sc.conf(5), App::Config(3), Sys::Syslog(3), syslog(3), tc(8), iptables(8),
-ipset(8).
+sc.conf(5), App::Config(3), Sys::Syslog(3), tc(8), iptables(8), ipset(8).
 
 =head1 AUTHOR
 

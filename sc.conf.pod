@@ -237,8 +237,7 @@ Possible values: see Sys::Syslog(3), section C<Facilities>.
 
 =head1 SEE ALSO
 
-sc(8), App::Config(3), Sys::Syslog(3), syslog(3), tc(8), iptables(8),
-ipset(8).
+sc(8), AppConfig(3), Sys::Syslog(3), tc(8), iptables(8), ipset(8).
 
 =head1 AUTHOR
 

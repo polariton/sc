@@ -1649,7 +1649,7 @@ only with IP's that have different last two octets.
 
 =head1 SEE ALSO
 
-sc.conf(5), App::Config(3), Sys::Syslog(3), tc(8), iptables(8), ipset(8).
+sc.conf(5), AppConfig(3), Sys::Syslog(3), tc(8), iptables(8), ipset(8).
 
 =head1 AUTHOR
 

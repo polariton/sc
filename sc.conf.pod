@@ -40,15 +40,16 @@ respectively.
 
 Debug modes.
 Default value: 0.
+
 Possible values:
 
 =over 4
 
 =item * 0 - no debug (default value),
 
-=item * 1 - print command line that caused error,
+=item * 1 - print only command line that caused error,
 
-=item * 2 - print command line without execution.
+=item * 2 - print all command lines without execution.
 
 =back
 
@@ -56,13 +57,13 @@ Possible values:
 
 Message verbosity level.
 Default value: 0.
-Boolean.
+Possible values: boolean.
 
 =item B<quiet>
 
 Suppress output. Does not affect messages caused by C<verbose> flag.
 Default value: 0.
-Boolean.
+Possible values: boolean.
 
 =item B<joint>
 
@@ -71,12 +72,15 @@ command.
 
 =item B<set_name>
 
-Name of set with allowed IP's. Default value: pass
+Name of set with allowed IP's.
+Default value: pass
+Possible values: ipset-accepted string
 
 =item B<set_type>
 
 Type of set.
 Default value: ipmap.
+
 Possible values:
 
 =over
@@ -112,7 +116,7 @@ attached to FORWARD chain.
 Amount of bytes a stream is allowed to dequeue before the next queue gets a
 turn.
 Default value: 1500.
-Possible values: >= MTU.
+Possible values: integer numbers >= MTU of the interface.
 
 =item B<rate_unit>
 

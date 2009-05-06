@@ -78,112 +78,112 @@ my %cmdd = (
 		'handler' => \&cmd_add,
 		# database handler (optional)
 		'dbhandler' => \&cmd_dbadd,
-		# parameters (optional)
-		'par' => '<ip> <rate>',
+		# arguments (optional)
+		'arg' => '<ip> <rate>',
 		# command description
-		'desc' => 'Add rules',
+		'desc' => 'add rules',
 		# check root privileges before execution (optional)
 		'priv' => 1,
 	},
 	'change|mod' => {
 		'handler' => \&cmd_change,
 		'dbhandler' => \&cmd_change,
-		'par' => '<ip> <rate>',
-		'desc' => 'Change rate for given IP',
+		'arg' => '<ip> <rate>',
+		'desc' => 'change rate',
 		'priv' => 1,
 	},
 	'del|rm' => {
 		'handler' => \&cmd_del,
 		'dbhandler' => \&cmd_dbdel,
-		'par' => '<ip>',
-		'desc' => 'Delete rules for given IP',
+		'arg' => '<ip>',
+		'desc' => 'delete rules',
 		'priv' => 1,
 	},
 	'list|ls' => {
 		'handler' => \&cmd_list,
-		'par' => '[ip]',
-		'desc' => 'List rules in human-readable form',
+		'arg' => '[ip]',
+		'desc' => 'list rules in human-readable form',
 		'priv' => 1,
 	},
 	'help' => {
 		'handler' => \&cmd_help,
-		'desc' => 'Show help and available database drivers',
+		'desc' => 'show help and available database drivers',
 		'priv' => 0,
 	},
 	'init' => {
 		'handler' => \&cmd_init,
-		'desc' => 'Initialization of firewall and QoS rules',
+		'desc' => 'initialization of firewall and QoS rules',
 		'priv' => 1,
 	},
 	'sync' => {
 		'handler' => \&cmd_sync,
-		'desc' => 'Synchronize rules with database',
+		'desc' => 'synchronize rules with database',
 		'priv' => 1,
 	},
 	'load|start' => {
 		'handler' => \&cmd_load,
-		'desc' => 'Load rules from database',
+		'desc' => 'load rules from database',
 		'priv' => 1,
 	},
 	'ratecvt' => {
 		'handler' => \&cmd_ratecvt,
-		'par' => '<rate> <unit>',
-		'desc' => 'Convert rate unit',
+		'arg' => '<rate> <unit>',
+		'desc' => 'convert rate unit',
 		'priv' => 0,
 	},
 	'reload|restart' => {
 		'handler' => \&cmd_reload,
-		'desc' => 'Delete all rules and load data from database',
+		'desc' => 'reset and load rules',
 		'priv' => 1,
 	},
 	'reset|stop' => {
 		'handler' => \&cmd_reset,
-		'desc' => 'Delete all shaping rules',
+		'desc' => 'delete all shaping rules',
 		'priv' => 1,
 	},
 	'show' => {
 		'handler' => \&cmd_show,
-		'par' => '[ip]',
-		'desc' => 'Show rules explicitly',
+		'arg' => '[ip]',
+		'desc' => 'show rules explicitly',
 		'priv' => 1,
 	},
 	'status' => {
 		'handler' => \&cmd_status,
-		'desc' => 'Show status of rules',
+		'desc' => 'show status of rules',
 		'priv' => 1,
 	},
 	'version' => {
 		'handler' => \&cmd_ver,
-		'desc' => 'Show version',
+		'desc' => 'output version',
 		'priv' => 0,
 	},
 	'dbadd' => {
 		'handler' => \&cmd_dbadd,
-		'par' => '<ip> <rate>',
-		'desc' => 'Add database entry',
+		'arg' => '<ip> <rate>',
+		'desc' => 'add database entry',
 		'priv' => 0,
 	},
 	'dbdel|dbrm' => {
 		'handler' => \&cmd_dbdel,
-		'par' => '<ip>',
-		'desc' => 'Delete database entry',
+		'arg' => '<ip>',
+		'desc' => 'delete database entry',
 		'priv' => 0,
 	},
 	'dblist|dbls' => {
 		'handler' => \&cmd_dblist,
-		'par' => '[ip]',
-		'desc' => 'List database entries',
+		'arg' => '[ip]',
+		'desc' => 'list database entries',
 		'priv' => 0,
 	},
 	'dbchange|dbmod' => {
 		'handler' => \&cmd_dbchange,
-		'par' => '<ip> <rate>',
-		'desc' => 'Change database entry',
+		'arg' => '<ip> <rate>',
+		'desc' => 'change database entry',
 		'priv' => 0,
 	},
 	'dbcreate' => {
 		'handler' => \&cmd_dbcreate,
-		'desc' => 'Create database and table',
+		'desc' => 'create database and table',
 		'priv' => 0,
 	},
 );
@@ -607,7 +607,7 @@ sub rul_add
 		"ceil $ceil quantum $quantum"
 	);
 	$tc_ptr->(
-		"class add dev $in_if parent 1: classid 1:$classid htb rate $rate ".
+		"class add dev $in_if  parent 1: classid 1:$classid htb rate $rate ".
 		"ceil $ceil quantum $quantum"
 	);
 
@@ -615,7 +615,7 @@ sub rul_add
 		"qdisc add dev $out_if parent 1:$classid handle $classid:0 $leaf_qdisc"
 	);
 	$tc_ptr->(
-		"qdisc add dev $in_if parent 1:$classid handle $classid:0 $leaf_qdisc"
+		"qdisc add dev $in_if  parent 1:$classid handle $classid:0 $leaf_qdisc"
 	);
 
 	$ips_ptr->("-A $set_name $ip");
@@ -636,10 +636,10 @@ sub rul_del
 	$ips_ptr->("-D $set_name $ip");
 
 	$tc_ptr->("qdisc del dev $out_if parent 1:$classid handle $classid:0");
-	$tc_ptr->("qdisc del dev $in_if parent 1:$classid handle $classid:0");
+	$tc_ptr->("qdisc del dev $in_if  parent 1:$classid handle $classid:0");
 
 	$tc_ptr->("class del dev $out_if parent 1: classid 1:$classid");
-	$tc_ptr->("class del dev $in_if parent 1: classid 1:$classid");
+	$tc_ptr->("class del dev $in_if  parent 1: classid 1:$classid");
 
 	return $?;
 }
@@ -710,42 +710,51 @@ sub print_rule
 {
 	my ($comment, @cmds) = @_;
 	my @out;
-	my $LIST;
-	my $ret = $E_OK;
+	my $PIPE;
 
 	foreach my $c (@cmds) {
-		open $LIST, '-|', $c or log_croak("unable to open pipe for $c");
-		push @out, <$LIST>;
-		close $LIST or log_croak("unable to close pipe for $c");
+		open $PIPE, '-|', $c or log_croak("unable to open pipe for $c");
+		push @out, <$PIPE>;
+		close $PIPE or log_croak("unable to close pipe for $c");
 	}
 	if (@out) {
 		print "$comment\n" if nonempty($comment);
 		print @out;
 	}
-	return $ret;
+	return $?;
 }
 
 sub print_cmds
 {
-	my (@cmdargs, @descs, @lens);
-	my ($i, $maxlen) = (0, 0);
-	foreach my $key (sort keys %cmdd) {
+	my @cmds = sort keys %cmdd;
+	my ($maxcmdlen, $maxarglen) = (0, 0);
+	my @colspace = (2, 2, 3);
+	my ($al, $cl);
+	my %lengths;
+
+	# find maximum length of command and arguments
+	foreach my $key (@cmds) {
 		my @aliases = split /\|/ixms, $key;
-		my $printcmd = "  $aliases[0]";
-		if (defined $cmdd{$key}{'par'}) {
-			$printcmd .= " $cmdd{$key}{'par'}";
-		}
-		push @cmdargs, $printcmd;
-		push @descs, $cmdd{$key}{'desc'};
-		my $len = length $cmdargs[$i];
-		$lens[$i] = $len;
-		$maxlen = $len if $len > $maxlen;
-		$i++;
+		$lengths{$key}{'cmd'} = $aliases[0];
+
+		$cl = length $aliases[0];
+		$lengths{$key}{'cmdl'} = $cl;
+		$maxcmdlen = $cl if $maxcmdlen < $cl;
+
+		$al = (defined $cmdd{$key}{'arg'})
+			? length $cmdd{$key}{'arg'} : 0;
+		$lengths{$key}{'argl'} = $al;
+		$maxarglen = $al if $maxarglen < $al;
 	}
-	print "Commands:\n";
-	for my $j (0..$#cmdargs) {
-		print $cmdargs[$j], ' ' x ($maxlen - $lens[$j] + 2), $descs[$j], "\n";
+
+	foreach my $key (@cmds) {
+		print ' ' x $colspace[0], $lengths{$key}{'cmd'},
+		      ' ' x ($maxcmdlen - $lengths{$key}{'cmdl'} + $colspace[1]);
+		print $cmdd{$key}{'arg'} if defined $cmdd{$key}{'arg'};
+		print ' ' x ($maxarglen - $lengths{$key}{'argl'} + $colspace[2]),
+		      $cmdd{$key}{'desc'}, "\n";
 	}
+
 	return;
 }
 
@@ -877,7 +886,7 @@ sub db_load
 
 	my ($intip, $rate, $ip, $classid);
 	while (my $ref = $sth->fetchrow_arrayref()) {
-		($intip, $rate) = @{$ref};
+		($intip, $rate) = @$ref;
 
 		if (!defined $rate) {
 			log_carp("IP $ip has undefined rate, skipping\n");
@@ -1281,7 +1290,7 @@ sub cmd_dblist
 		my $sth = $dbh->prepare($query_list);
 		$sth->execute($intip);
 		while (my $ref = $sth->fetchrow_arrayref()) {
-			($intip, $rate) = @{$ref};
+			($intip, $rate) = @$ref;
 			printf "%-15s  %10s\n", $ip, $rate . $rate_unit;
 		}
 		$sth->finish();
@@ -1355,8 +1364,8 @@ Example: for 172.16.1.12 address classid is 10d.
 
 =over 8
 
-=item B<DBI> and corresponding database-dependent modules
-(e.g. B<DBD::mysql> for MySQL or B<DBD::SQLite> for SQLite).
+=item B<DBI> and corresponding database-dependent module
+(e.g. B<DBD::mysql> for MySQL, B<DBD::SQLite> for SQLite, etc).
 
 =item B<Pod::Usage> for compilation of manpage.
 
@@ -1372,8 +1381,8 @@ tc(8), iptables(8) and ipset(8).
 
 =over 8
 
-=item B<Flow> traffic classifier (option B<CONFIG_NET_CLS_FLOW>=m or y,
-requires kernel version 2.6.25 or above).
+=item B<Flow> traffic classifier (requires kernel version 2.6.25 or above,
+option B<CONFIG_NET_CLS_FLOW>=m or y).
 
 =item B<IPSet> modules (see L<http://ipset.netfilter.org/>).
 
@@ -1389,7 +1398,7 @@ Add rules for specified IP
 
 =item B<change | mod> <ip> <rate>
 
-Change rate for given IP
+Change rate for specified IP
 
 =item B<dbadd> <ip> <rate>
 
@@ -1409,41 +1418,45 @@ Create database and table
 
 Delete database entry
 
-=item B<dblist | dbls>
+=item B<dblist | dbls> [ip]
 
-List database entries
+List database entries. If no IP specified, all entries are listed.
 
 =item B<del | rm> <ip>
 
-Delete rules for given IP
+Delete rules
 
 =item B<help>
 
-Show manpage
+Show help for commands, options and list available database drivers
 
 =item B<init>
 
-Initialization of firewall and QoS rules. Only for manual rule editing.
+Initialization of firewall and QoS rules. Use it only for manual rule editing.
 
 =item B<list | ls> [ip]
 
-List rules in human-readable form
+List rules in human-readable form. If no IP specified, all entries are listed.
 
-=item B<load>
+=item B<load | start>
 
 Load IP's and rates from database and create ruleset
 
-=item B<reload>
+=item B<reload | restart>
 
-Delete all rules and load from database
+Reset rules and load database
 
-=item B<reset>
+=item B<reset | stop>
 
 Delete all shaping rules
 
+=item B<ratecvt> <rate> <unit>
+
+Convert rate from one unit to another
+
 =item B<show> [ip]
 
-Show rules explicitly
+Show rules explicitly. If no IP specified, all entries are listed.
 
 =item B<sync>
 
@@ -1461,16 +1474,16 @@ Show version
 
 =item B<-b>, B<--batch>
 
-Enter batch mode to read rules from STDIN
+Batch mode. sc reads commands from STDIN.
 
 =item B<-j>, B<--joint>
 
-Joint mode. Add, change and del commands will be applied to both rules and
-database
+Joint mode. Add, change and del commands will be applied to rules and database
+entries simultaneously.
 
 =item B<-d>, B<--debug> level
 
-Debugging level (from 0 to 2)
+Set debugging level (from 0 to 2)
 
 =item B<-v>, B<--verbose>
 
@@ -1494,11 +1507,11 @@ Name of input network interface
 
 =item B<-c>, B<--chain> name
 
-Name of iptables(8) chain for shaping rules
+Name of iptables(8) chain to use
 
 =item B<--set_name> name
 
-Name of IP set
+Name of IP set for storage of allowed IP's
 
 =item B<--set_type> type
 
@@ -1534,7 +1547,7 @@ Database driver
 
 =item B<--db_host> host:port
 
-Host of database server address or hostname
+Database server address or hostname
 
 =item B<--db_name> name
 
@@ -1550,32 +1563,9 @@ Database password
 
 =back
 
-=head1 EXAMPLES
-
-=over 8
-
-=item Loading of rules from database
-
-C<sc load>
-
-=item Add class for IP 172.16.0.1 with 10Mibit/s.
-
-C<sc add 172.16.0.1 10Mibit>
-
-=item Change rate to 20Mibit/s
-
-C<sc change 172.16.0.1 20Mibit>
-
-=item Delete class for 172.16.0.1
-
-C<sc del 172.16.0.1>
-
-=back
-
 =head1 RATE UNITS
 
-All rates should be specified as integer numbers, possibly followed
-by a unit.
+All rates should be specified as integer numbers, possibly followed by a unit.
 
 =over 22
 
@@ -1637,6 +1627,28 @@ gigabyte per second
 
 =back
 
+=head1 EXAMPLES
+
+=over 8
+
+=item Loading of rules from database
+
+C<sc load>
+
+=item Add class for IP 172.16.0.1 with 256kibit/s.
+
+C<sc add 172.16.0.1 256kibit>
+
+=item Change rate to 512kibit/s
+
+C<sc change 172.16.0.1 512kibit>
+
+=item Delete class for 172.16.0.1
+
+C<sc del 172.16.0.1>
+
+=back
+
 =head1 CONFIGURATION
 
 By default B<sc> reads F</etc/sc/sc.conf> file and uses SQLite database
@@ -1644,8 +1656,8 @@ F</etc/sc/sc.db>. See sc.conf(5) for details.
 
 =head1 BUGS AND LIMITATIONS
 
-Due to deterministic mapping of IP's to classid's B<sc> works
-only with IP's that have different last two octets.
+Due to deterministic mapping of IP's to classid's B<sc> works only with IP's
+that have different last two octets.
 
 =head1 SEE ALSO
 

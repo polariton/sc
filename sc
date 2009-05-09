@@ -122,7 +122,7 @@ my %cmdd = (
 	},
 	'load|start' => {
 		'handler' => \&cmd_load,
-		'desc' => 'load rules from database',
+		'desc' => 'load database and create all rules',
 		'priv' => 1,
 	},
 	'ratecvt' => {
@@ -597,25 +597,25 @@ sub ssys
 
 sub rul_add
 {
-	my ($ip, $classid, $rate) = @_;
+	my ($ip, $cid, $rate) = @_;
 
 	my $ceil = $rate;
 	my $ret = 0;
 
 	$tc_ptr->(
-		"class add dev $out_if parent 1: classid 1:$classid htb rate $rate ".
+		"class add dev $out_if parent 1: classid 1:$cid htb rate $rate ".
 		"ceil $ceil quantum $quantum"
 	);
 	$tc_ptr->(
-		"class add dev $in_if  parent 1: classid 1:$classid htb rate $rate ".
+		"class add dev $in_if  parent 1: classid 1:$cid htb rate $rate ".
 		"ceil $ceil quantum $quantum"
 	);
 
 	$tc_ptr->(
-		"qdisc add dev $out_if parent 1:$classid handle $classid:0 $leaf_qdisc"
+		"qdisc add dev $out_if parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
 	$tc_ptr->(
-		"qdisc add dev $in_if  parent 1:$classid handle $classid:0 $leaf_qdisc"
+		"qdisc add dev $in_if  parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
 
 	$ips_ptr->("-A $set_name $ip");
@@ -625,7 +625,7 @@ sub rul_add
 
 sub rul_del
 {
-	my ($ip, $classid) = @_;
+	my ($ip, $cid) = @_;
 
 	if (!$loading || !$batch) {
 		if (ssys("$ipset -T $set_name $ip")) {
@@ -635,18 +635,18 @@ sub rul_del
 
 	$ips_ptr->("-D $set_name $ip");
 
-	$tc_ptr->("qdisc del dev $out_if parent 1:$classid handle $classid:0");
-	$tc_ptr->("qdisc del dev $in_if  parent 1:$classid handle $classid:0");
+	$tc_ptr->("qdisc del dev $out_if parent 1:$cid handle $cid:0");
+	$tc_ptr->("qdisc del dev $in_if  parent 1:$cid handle $cid:0");
 
-	$tc_ptr->("class del dev $out_if parent 1: classid 1:$classid");
-	$tc_ptr->("class del dev $in_if  parent 1: classid 1:$classid");
+	$tc_ptr->("class del dev $out_if parent 1: classid 1:$cid");
+	$tc_ptr->("class del dev $in_if  parent 1: classid 1:$cid");
 
 	return $?;
 }
 
 sub rul_change
 {
-	my ($ip, $classid, $rate) = @_;
+	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 
 	if (!$loading || !$batch) {
@@ -656,11 +656,11 @@ sub rul_change
 	}
 
 	$tc_ptr->(
-		"class change dev $out_if parent 1:0 classid 1:$classid htb ".
+		"class change dev $out_if parent 1:0 classid 1:$cid htb ".
 		"rate $rate ceil $ceil quantum $quantum"
 	);
 	$tc_ptr->(
-		"class change dev $in_if parent 1:0 classid 1:$classid htb ".
+		"class change dev $in_if parent 1:0 classid 1:$cid htb ".
 		"rate $rate ceil $ceil quantum $quantum"
 	);
 
@@ -669,7 +669,7 @@ sub rul_change
 
 sub rul_load
 {
-	my ($ip, $classid, $rate);
+	my ($ip, $cid, $rate);
 	my $ret = 0;
 
 	open my $TCH, '-|', "$tc class show dev $out_if"
@@ -678,9 +678,9 @@ sub rul_load
 	close $TCH or log_carp("unable to close pipe for $tc");
 	foreach (@tcout) {
 		if (/leaf\ (\w+):\ .* rate\ (\w+)/ixms) {
-			($classid, $rate) = ($1, $2);
+			($cid, $rate) = ($1, $2);
 			$rate = rate_cvt($rate, $rate_unit);
-			$rul_data{$classid}{'rate'} = $rate;
+			$rul_data{$cid}{'rate'} = $rate;
 		}
 	}
 
@@ -692,21 +692,21 @@ sub rul_load
 		next unless /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/ixms;
 		chomp;
 		$ip = $_;
-		$classid = ip_classid($ip);
+		$cid = ip_classid($ip);
 
-		if (defined $rul_data{$classid}{'ip'}) {
+		if (defined $rul_data{$cid}{'ip'}) {
 			log_carp("IP-to-classid collision detected, skipping. OLD: ".
-				$rul_data{$classid}{'ip'}.", NEW: $ip");
+				$rul_data{$cid}{'ip'}.", NEW: $ip");
 			$ret = $E_IP_COLL;
 			next;
 		}
 
-		$rul_data{$classid}{'ip'} = $ip;
+		$rul_data{$cid}{'ip'} = $ip;
 	}
 	return $ret;
 }
 
-sub print_rule
+sub print_rules
 {
 	my ($comment, @cmds) = @_;
 	my @out;
@@ -884,7 +884,7 @@ sub db_load
 	my $sth = $dbh->prepare($query_load);
 	$sth->execute();
 
-	my ($intip, $rate, $ip, $classid);
+	my ($intip, $rate, $ip, $cid);
 	while (my $ref = $sth->fetchrow_arrayref()) {
 		($intip, $rate) = @$ref;
 
@@ -895,10 +895,10 @@ sub db_load
 		}
 
 		$ip = ip_inttotext($intip);
-		$classid = ip_classid($ip);
+		$cid = ip_classid($ip);
 
-		$db_data{$classid}{'rate'} = $rate;
-		$db_data{$classid}{'ip'} = $ip;
+		$db_data{$cid}{'rate'} = $rate;
+		$db_data{$cid}{'ip'} = $ip;
 	}
 
 	$sth->finish();
@@ -1010,10 +1010,10 @@ sub cmd_list
 		}
 	}
 	else {
-		my $classid = ip_classid($ip);
-		if (defined $rul_data{$classid}) {
-			printf "%4s  %-15s %10s\n", $classid, $rul_data{$classid}{'ip'},
-				$rul_data{$classid}{'rate'};
+		my $cid = ip_classid($ip);
+		if (defined $rul_data{$cid}) {
+			printf "%4s  %-15s %10s\n", $cid, $rul_data{$cid}{'ip'},
+				$rul_data{$cid}{'rate'};
 		}
 	}
 	return $ret;
@@ -1050,34 +1050,34 @@ sub cmd_show
 	}
 
 	foreach my $ip (@ips) {
-		my $classid = ip_classid($ip);
+		my $cid = ip_classid($ip);
 
 # tc qdisc
-		print_rule(
-			"\nTC rules for $ip\n\nInput qdisc [$in_if, $classid]:",
+		print_rules(
+			"\nTC rules for $ip\n\nInput qdisc [$in_if, $cid]:",
 			"$tc -i -s -d qdisc show dev $in_if | ".
-			"fgrep -w -A 2 \"$classid\: parent 1:$classid\""
+			"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 		);
-		print_rule(
-			"\nOutput qdisc [$out_if, $classid]:",
+		print_rules(
+			"\nOutput qdisc [$out_if, $cid]:",
 			"$tc -i -s -d qdisc show dev $out_if | ".
-			"fgrep -w -A 2 \"$classid\: parent 1:$classid\""
+			"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 		);
 
 # tc class
-		print_rule(
-			"\nInput class [$in_if, $classid]:",
+		print_rules(
+			"\nInput class [$in_if, $cid]:",
 			"$tc -i -s -d class show dev $in_if | ".
-			"fgrep -w -A 3 \"leaf $classid\:\""
+			"fgrep -w -A 3 \"leaf $cid\:\""
 		);
-		print_rule(
-			"\nOutput class [$out_if, $classid]:",
+		print_rules(
+			"\nOutput class [$out_if, $cid]:",
 			"$tc -i -s -d class show dev $out_if | ".
-			"fgrep -w -A 3 \"leaf $classid\:\""
+			"fgrep -w -A 3 \"leaf $cid\:\""
 		);
 
 # iptables
-		print_rule("\nIPSet entry for $ip:", "$ipset -T $set_name $ip");
+		print_rules("\nIPSet entry for $ip:", "$ipset -T $set_name $ip");
 	}
 
 	return $?;
@@ -1631,7 +1631,7 @@ gigabyte per second
 
 =over 8
 
-=item Loading of rules from database
+=item Load accounts from database and create all rules
 
 C<sc load>
 
@@ -1643,7 +1643,7 @@ C<sc add 172.16.0.1 256kibit>
 
 C<sc change 172.16.0.1 512kibit>
 
-=item Delete class for 172.16.0.1
+=item Delete rules for 172.16.0.1
 
 C<sc del 172.16.0.1>
 

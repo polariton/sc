@@ -1,0 +1,21 @@
+#!/usr/bin/perl
+
+# genbase - generate sc database for testing puroses
+
+use strict;
+use warnings;
+
+my $max3 = 10;
+
+open my $SCH, '|-', "./sc -b";
+
+print $SCH "dbcreate\n";
+
+for my $i (0..$max3) {
+	for my $j (1..254) {
+		my $random = 2**(int( rand(9)) + 7);
+		print $SCH "dbadd 172.16.$i.$j ${random}Kibit\n"
+	}
+}
+close $SCH;
+

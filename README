@@ -89,3 +89,9 @@ synchronization of rules will be performed every 10 minutes.
 sc can log errors and warnings through syslog. To turn on this
 feature, set the "syslog" option to 1 in /etc/sc/sc.conf.
 
+Testing & Usage
+===============
+
+Package includes "genbase" script that allows you to create database with
+IP-addresses (from 172.16.0.0/16 by default) and random bandwidth rates.
+

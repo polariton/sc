@@ -85,10 +85,10 @@ Possible values:
 
 =over
 
-=item * C<ipmap> - stores IP's from one /16 network defined by C<network>
+=item * ipmap - stores IP's from one /16 network defined by C<network>
 parameter (memory cheap and very fast).
 
-=item * C<iphash> - stores IP's from arbitrary /16 networks.
+=item * iphash - stores IP's from arbitrary /16 networks.
 
 =back
 

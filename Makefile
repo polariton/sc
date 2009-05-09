@@ -9,6 +9,7 @@ CFGDIR=/etc/sc
 
 CLFILES?=sc.8.gz sc.conf.5.gz $(ARCH)
 
+
 man: sc.8.gz sc.conf.5.gz
 
 sc.8.gz: sc
@@ -20,22 +21,29 @@ sc.conf.5.gz: sc.conf.pod
 
 help:
 	@echo "Targets:"
-	@echo "  clean    clean output files"
-	@echo "  install  install script and manpages"
-	@echo "  man      (default) generate manual pages from POD-files"
-	@echo "  help     show this message"
+	@echo "  clean      clean output files"
+	@echo "  install    install program"
+	@echo "  man        (default) generate manpages"
+	@echo "  help       show this message"
+	@echo "  uninstall  uninstall program"
 
-install: sc.conf.5.gz sc.8.gz
-	cp -f sc.8.gz $(MANDIR)/man8
-	cp -f sc.conf.5.gz $(MANDIR)/man5
+install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf
+	install -o root -g root -m 755 $(PROG) $(DESTDIR)
+	install -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
+	install -o root -g root -m 644 sc.8.gz $(MANDIR)/man8
+	install -o root -g root -m 644 sc.conf.5.gz $(MANDIR)/man5
 	mkdir -p /etc/sc
 	if [ -f $(CFGDIR)/sc.conf ]; then\
-		cp -f sc.conf $(CFGDIR)/sc.conf.default ;\
+		install -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\
 	else \
-		cp sc.conf $(CFGDIR) ;\
+		install -o root -g root -m 644 sc.conf $(CFGDIR) ;\
 	fi
-	cp -f sc $(DESTDIR)
-	cp -f sc.init /etc/init.d/sc
+
+uninstall:
+	rm -f $(MANDIR)/man8/sc.8.gz
+	rm -f $(MANDIR)/man5/sc.conf.5.gz
+	rm $(DESTDIR)/sc
+	[ -f /etc/init.d/sc ] && rm $(INITDIR)/sc
 
 clean:
 	rm -f $(CLFILES)

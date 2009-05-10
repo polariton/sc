@@ -213,10 +213,11 @@ my $E_OK       = 0;
 my $E_PARAM    = 1;
 my $E_IP_COLL  = 2;
 my $E_UNDEF    = 3;
-my $E_NOTEXIST = 4;
-my $E_CMD      = 5;
-my $E_RUL      = 6;
-my $E_PRIV     = 7;
+my $E_EXIST    = 4;
+my $E_NOTEXIST = 5;
+my $E_CMD      = 6;
+my $E_RUL      = 7;
+my $E_PRIV     = 8;
 
 # return value
 my $RET = $E_OK;
@@ -227,26 +228,29 @@ $VERSTR
 
 Usage: $PROG [options] command <arguments>
 
+Commands:
 EOF
 ;
 
 # options dispatch table for AppConfig and Getopt::Long
 my %optd = (
-	'b|batch'           => \$batch,
-	'j|joint'           => \$joint,
-	'v|verbose!'        => \$verbose,
-	'd|debug=i'         => \$debug,
-	'S|syslog'          => \$syslog,
 	'f|config=s'        => \$cfg_file,
+	'iptables=s'        => \$iptables,
+	'tc=s'              => \$tc,
+	'ipset=s'           => \$ipset,
 	'o|out_if=s'        => \$out_if,
 	'i|in_if=s'         => \$in_if,
-	'c|chain=s'         => \$chain_name,
+	'd|debug=i'         => \$debug,
+	'v|verbose!'        => \$verbose,
+	'q|quiet!'          => \$quiet,
+	'j|joint'           => \$joint,
+	'b|batch'           => \$batch,
 	's|set_name=s'      => \$set_name,
 	'set_type=s'        => \$set_type,
 	'set_size=s'        => \$set_size,
 	'N|network=s'       => \$network,
+	'c|chain=s'         => \$chain_name,
 	'quantum=s'         => \$quantum,
-	'q|quiet!'          => \$quiet,
 	'u|rate_unit=s'     => \$rate_unit,
 	'leaf_qdisc=s'      => \$leaf_qdisc,
 	'db_driver=s'       => \$db_driver,
@@ -260,11 +264,9 @@ my %optd = (
 	'query_add=s'       => \$query_add,
 	'query_del=s'       => \$query_del,
 	'query_change=s'    => \$query_change,
+	'S|syslog'          => \$syslog,
 	'syslog_options'    => \$syslog_options,
 	'syslog_facility=s' => \$syslog_facility,
-	'iptables=s'        => \$iptables,
-	'tc=s'              => \$tc,
-	'ipset=s'           => \$ipset,
 );
 
 my %db_data;
@@ -380,12 +382,21 @@ sub main
 	if ($RET == $E_NOTEXIST) {
 		log_carp("specified IP does not exist. Arguments: @argv");
 	}
+	elsif ($RET == $E_EXIST) {
+		log_carp("specified IP already exists. Arguments: @argv");
+	}
 
 	if ($joint && defined $cmdd{$cmd}{'dbhandler'}) {
 		$RET = $cmdd{$cmd}{'dbhandler'}->(@argv);
 		if ($RET == $E_NOTEXIST) {
 			log_carp(
 				"database entry for specified IP does not exist. ".
+				"Arguments: @argv"
+			);
+		}
+		elsif ($RET == $E_EXIST) {
+			log_carp(
+				"database entry for specified IP already exists. ".
 				"Arguments: @argv"
 			);
 		}
@@ -602,6 +613,12 @@ sub rul_add
 	my $ceil = $rate;
 	my $ret = 0;
 
+	if (!$loading || !$batch) {
+		if (!ssys("$ipset -T $set_name $ip")) {
+			return $E_EXIST;
+		}
+	}
+
 	$tc_ptr->(
 		"class add dev $out_if parent 1: classid 1:$cid htb rate $rate ".
 		"ceil $ceil quantum $quantum"
@@ -620,7 +637,7 @@ sub rul_add
 
 	$ips_ptr->("-A $set_name $ip");
 
-	return $E_OK;
+	return $?;
 }
 
 sub rul_del
@@ -927,7 +944,8 @@ sub tc_ipset_init
 	# create iphash and rules for allowed IP's
 	if ($set_type eq 'ipmap') {
 		$ips_ptr->("-N $set_name $set_type --network $network");
-	} elsif ($set_type eq 'iphash') {
+	}
+	elsif ($set_type eq 'iphash') {
 		$ips_ptr->("-N $set_name $set_type --hashsize $set_size");
 	}
 	return $?;
@@ -953,8 +971,7 @@ sub ipt_init
 
 sub cmd_init
 {
-	my @arg = @_;
-	tc_ipset_init(@arg);
+	tc_ipset_init();
 	ipt_init();
 
 	return $?;
@@ -998,6 +1015,15 @@ sub cmd_del
 	return rul_del($ip, ip_classid($ip));
 }
 
+sub cmd_change
+{
+	my ($ip, $rate) = @_;
+
+	arg_check(\&is_ip, $ip, "IP");
+	$rate = arg_check(\&is_rate, $rate, "rate");
+	return rul_change($ip, ip_classid($ip), $rate);
+}
+
 sub cmd_list
 {
 	my $ip = shift;
@@ -1017,15 +1043,6 @@ sub cmd_list
 		}
 	}
 	return $ret;
-}
-
-sub cmd_change
-{
-	my ($ip, $rate) = @_;
-
-	arg_check(\&is_ip, $ip, "IP");
-	$rate = arg_check(\&is_rate, $rate, "rate");
-	return rul_change($ip, ip_classid($ip), $rate);
 }
 
 sub cmd_show

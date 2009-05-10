@@ -140,9 +140,9 @@ Possible values: IP-address or domain name.
 =item B<db_driver>
 
 Database driver.
-Default value: sqlite
+Default value: SQLite.
 Possible values: all database drivers supported by Perl DBI module. See output
-of C<sc help> command for list of available drivers.
+of C<sc help> command for the list of available drivers.
 
 =item B<db_user>
 

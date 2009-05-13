@@ -28,7 +28,7 @@ fi
 
 case "$1" in
   start)
-	log_daemon_msg "Loading shaping rules" "sc"
+	log_daemon_msg "Starting shaper" "sc"
 	if $SC $SC_OPTS load ; then
 	    log_end_msg 0
 	else
@@ -37,7 +37,7 @@ case "$1" in
 	;;
 
   stop)
-	log_daemon_msg "Deleting shaping rules" "sc"
+	log_daemon_msg "Stopping shaper" "sc"
 	if $SC $SC_OPTS reset ; then
 	    log_end_msg 0
 	else
@@ -46,7 +46,7 @@ case "$1" in
 	;;
 
   restart|reload|force-reload)
-	log_daemon_msg "Reloading shaping rules" "sc"
+	log_daemon_msg "Restarting shaper" "sc"
 	if $SC $SC_OPTS reload ; then
 	    log_end_msg 0
 	else

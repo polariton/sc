@@ -49,5 +49,5 @@ clean:
 	rm -f $(CLFILES)
 
 srcdist:
-	hg archive -t tbz2 -X .hgignore -X .hg_archival.txt $(ARCH)
+	hg archive -t tbz2 -X .hgtags -X .hgignore -X .hg_archival.txt $(ARCH)
 

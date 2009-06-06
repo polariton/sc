@@ -1628,7 +1628,7 @@ kilobyte per second
 
 =item mibps or MiBps
 
-mibibyte per second
+mebibyte per second
 
 =item mbps or MBps
 

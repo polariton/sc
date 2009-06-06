@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-# genbase - generate sc database for testing puroses
+# genbase - generate sc database for testing purposes
 
 use strict;
 use warnings;

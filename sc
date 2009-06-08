@@ -613,12 +613,6 @@ sub rul_add
 	my $ceil = $rate;
 	my $ret = 0;
 
-	if (!$loading || !$batch) {
-		if (!ssys("$ipset -T $set_name $ip")) {
-			return $E_EXIST;
-		}
-	}
-
 	$tc_ptr->(
 		"class add dev $out_if parent 1: classid 1:$cid htb rate $rate ".
 		"ceil $ceil quantum $quantum"
@@ -644,12 +638,6 @@ sub rul_del
 {
 	my ($ip, $cid) = @_;
 
-	if (!$loading || !$batch) {
-		if (ssys("$ipset -T $set_name $ip")) {
-			return $E_NOTEXIST;
-		}
-	}
-
 	$ips_ptr->("-D $set_name $ip");
 
 	$tc_ptr->("qdisc del dev $out_if parent 1:$cid handle $cid:0");
@@ -665,12 +653,6 @@ sub rul_change
 {
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
-
-	if (!$loading || !$batch) {
-		if (ssys("$ipset -T $set_name $ip")) {
-			return $E_NOTEXIST;
-		}
-	}
 
 	$tc_ptr->(
 		"class change dev $out_if parent 1:0 classid 1:$cid htb ".

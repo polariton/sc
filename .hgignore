@@ -6,4 +6,5 @@ syntax: glob
 *~
 old
 *.orig
+*.out
 

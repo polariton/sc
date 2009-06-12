@@ -923,7 +923,7 @@ sub tc_ipset_init
 		"flow map key dst and 0xffff"
 	);
 
-	# create iphash and rules for allowed IP's
+	# create iphash and rules for allowed IPs
 	if ($set_type eq 'ipmap') {
 		$ips_ptr->("-N $set_name $set_type --network $network");
 	}
@@ -1089,7 +1089,7 @@ sub cmd_sync
 	rul_load();
 	db_load();
 
-	# delete rules for IP's that is not in database
+	# delete rules for IPs that is not in database
 	foreach my $rcid (keys %rul_data) {
 		if (!defined $db_data{$rcid} && defined $rul_data{$rcid}) {
 			my $ip = $rul_data{$rcid}{'ip'};
@@ -1327,7 +1327,7 @@ B<sc> is a command-line tool intended to simplify administration of traffic
 shaper for Internet service providers. ISP's usually work with the following
 configuration: every customer has it's own IP-address and fixed bandwidth.
 B<sc> works like a wrapper for tc(8), iptables(8) and ipset(8) abstracting you
-from complexity of their rules, so you can think only about IP's and bandwidth
+from complexity of their rules, so you can think only about IPs and bandwidth
 rates and almost forget about classid's, qdiscs, filters and IP hashes.
 
 =head2 Features
@@ -1337,7 +1337,7 @@ rates and almost forget about classid's, qdiscs, filters and IP hashes.
 =item * Fast loading of large rulesets by using batch modes of tc(8) and
 ipset(8).
 
-=item * Loading and editing of IP's and rates from any relational database
+=item * Loading and editing of IPs and rates from any relational database
 supported by Perl B<DBI> module.
 
 =item * Batch command execution mode for scripting purposes.
@@ -1439,7 +1439,7 @@ List rules in human-readable form. If no IP specified, all entries are listed.
 
 =item B<load | start>
 
-Load IP's and rates from database and create ruleset
+Load IPs and rates from database and create ruleset
 
 =item B<reload | restart>
 
@@ -1510,7 +1510,7 @@ Name of iptables(8) chain to use
 
 =item B<--set_name> name
 
-Name of IP set for storage of allowed IP's
+Name of IP set for storage of allowed IPs
 
 =item B<--set_type> type
 
@@ -1655,7 +1655,7 @@ F</etc/sc/sc.db>. See sc.conf(5) for details.
 
 =head1 BUGS AND LIMITATIONS
 
-Due to deterministic mapping of IP's to classid's B<sc> works only with IP's
+Due to deterministic mapping of IPs to classids B<sc> works only with IPs
 that have different last two octets.
 
 =head1 SEE ALSO

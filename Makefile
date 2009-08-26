@@ -1,5 +1,5 @@
 PROG=sc
-VERSION=1.0.0
+VERSION=1.0.1
 ARCH=$(PROG)-$(VERSION).tar.bz2
 
 MANDIR?=/usr/local/share/man
@@ -32,7 +32,7 @@ install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf
 	install -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
 	install -o root -g root -m 644 sc.8.gz $(MANDIR)/man8
 	install -o root -g root -m 644 sc.conf.5.gz $(MANDIR)/man5
-	mkdir -p /etc/sc
+	mkdir -p $(CFGDIR)
 	if [ -f $(CFGDIR)/sc.conf ]; then\
 		install -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\
 	else \
@@ -40,10 +40,10 @@ install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf
 	fi
 
 uninstall:
-	rm -f $(MANDIR)/man8/sc.8.gz
-	rm -f $(MANDIR)/man5/sc.conf.5.gz
 	rm $(DESTDIR)/sc
-	[ -f /etc/init.d/sc ] && rm $(INITDIR)/sc
+	[ -f $(INITDIR)/sc ] && rm $(INITDIR)/sc
+	rm $(MANDIR)/man8/sc.8.gz
+	rm $(MANDIR)/man5/sc.conf.5.gz
 
 clean:
 	rm -f $(CLFILES)

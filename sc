@@ -65,7 +65,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.0.0';
+my $VERSION = '1.0.1';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # Loading flag
@@ -618,7 +618,7 @@ sub rul_add
 		"ceil $ceil quantum $quantum"
 	);
 	$tc_ptr->(
-		"class add dev $in_if  parent 1: classid 1:$cid htb rate $rate ".
+		"class add dev $in_if parent 1: classid 1:$cid htb rate $rate ".
 		"ceil $ceil quantum $quantum"
 	);
 
@@ -626,7 +626,7 @@ sub rul_add
 		"qdisc add dev $out_if parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
 	$tc_ptr->(
-		"qdisc add dev $in_if  parent 1:$cid handle $cid:0 $leaf_qdisc"
+		"qdisc add dev $in_if parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
 
 	$ips_ptr->("-A $set_name $ip");
@@ -641,10 +641,10 @@ sub rul_del
 	$ips_ptr->("-D $set_name $ip");
 
 	$tc_ptr->("qdisc del dev $out_if parent 1:$cid handle $cid:0");
-	$tc_ptr->("qdisc del dev $in_if  parent 1:$cid handle $cid:0");
+	$tc_ptr->("qdisc del dev $in_if parent 1:$cid handle $cid:0");
 
 	$tc_ptr->("class del dev $out_if parent 1: classid 1:$cid");
-	$tc_ptr->("class del dev $in_if  parent 1: classid 1:$cid");
+	$tc_ptr->("class del dev $in_if parent 1: classid 1:$cid");
 
 	return $?;
 }

@@ -73,8 +73,8 @@ command.
 =item B<set_name>
 
 Name of set with allowed IP's.
-Default value: pass
-Possible values: ipset-accepted string
+Default value: pass.
+Possible values: ipset-accepted string.
 
 =item B<set_type>
 
@@ -134,15 +134,15 @@ Possible values: all classless qdiscs supported by tc(8).
 =item B<db_host>
 
 Database host.
-Default value: 127.0.0.1
+Default value: 127.0.0.1.
 Possible values: IP-address or domain name.
 
 =item B<db_driver>
 
 Database driver.
 Default value: SQLite.
-Possible values: all database drivers supported by Perl DBI module. See output
-of C<sc help> command for the list of available drivers.
+Possible values: all database drivers supported by Perl DBI module.
+See output of C<sc help> command for the list of available drivers.
 
 =item B<db_user>
 
@@ -206,7 +206,7 @@ Possible values: boolean.
 
 =item B<syslog_options>
 
-syslog options.
+Syslog options.
 Default value: empty string.
 Possible values (comma-separated):
 

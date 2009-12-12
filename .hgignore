@@ -1,10 +1,12 @@
 syntax: glob
+old
+draft
 *.sh
 *.gz
 *.bz2
 .*.swp
 *~
-old
 *.orig
 *.out
+*.batch
 

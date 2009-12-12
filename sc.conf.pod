@@ -18,8 +18,9 @@ B<sc.conf> - configuration file for sc(8).
 The file F<sc.conf> contains configuration information for shaper control tool
 sc(8).
 
-The sc.conf is parsed using C<AppConfig> module and has a simple "variable =
-value" form. The file may contain extra tabs and newlines for formatting.
+The sc.conf is parsed using C<AppConfig> module and has a simple C<variable =
+value> form.
+The file may contain extra tabs and newlines for formatting.
 Comments begin with the B<#> character and end at the end of line, just like
 in shell or Perl scripts.
 
@@ -36,6 +37,25 @@ Location of iptables(8), tc(8) and ipset(8) executables, respectively.
 Names of interfaces that will be used for shaping of output and input traffic,
 respectively.
 
+=item B<filter_method>
+
+Traffic classification (filtering) method.
+Default value: u32.
+
+Possible values:
+
+=over 7
+
+=item B<flow>
+
+flow classifier and ipset(8) for access control.
+
+=item B<u32>
+
+u32 hashing filters.
+
+=back
+
 =item B<debug>
 
 Debug modes.
@@ -43,26 +63,43 @@ Default value: 0.
 
 Possible values:
 
-=over 4
+=over
 
-=item * 0 - no debug (default value),
+=item B<0>
 
-=item * 1 - print only command line that caused error,
+no debug (default value),
 
-=item * 2 - print all command lines without execution.
+=item B<1>
+
+print only command line that caused error,
+
+=item B<2>
+
+print all command lines without execution.
 
 =back
 
 =item B<verbose>
 
-Message verbosity level.
+When enabled, turns on verbose messages and disables piping of tc(8) and
+ipset(8) rules.
 Default value: 0.
+
 Possible values: boolean.
 
 =item B<quiet>
 
 Suppress output. Does not affect messages caused by C<verbose> flag.
 Default value: 0.
+
+Possible values: boolean.
+
+=item B<colored>
+
+Colorize output using ANSI escape sequences.
+Autodetection of non-tty handles is supported.
+Default value: 1.
+
 Possible values: boolean.
 
 =item B<joint>
@@ -72,7 +109,7 @@ command.
 
 =item B<set_name>
 
-Name of set with allowed IP's.
+Name of set with allowed IPs.
 Default value: pass.
 Possible values: ipset-accepted string.
 
@@ -83,84 +120,135 @@ Default value: ipmap.
 
 Possible values:
 
-=over
+=over 8
 
-=item * ipmap - stores IP's from one /16 network defined by C<network>
-parameter (memory cheap and very fast).
+=item B<ipmap>
 
-=item * iphash - stores IP's from arbitrary /16 networks.
+Stores IPs from one /16 network defined by C<network> parameter (fast and
+memory cheap).
+
+=item B<iphash>
+
+Stores IPs from arbitrary /16 networks (slower).
 
 =back
 
 =item B<network>
 
-Network for ipmap set.
+Network for ipmap set, if you use B<flow> filtering method.
+Network list for classid calculation, if you use B<u32>.
+
 Default value: 172.16.0.0/16
-Possible values: any network with mask value between 16-31
+
+Possible values:
+A single network with mask from 16 to 31 for B<flow> method.
+A list of networks with mask from 16 to 31 for B<u32> method.
+Total number of hosts in specified networks should not exceed the
+maximum number of child classes, e.g. 65534 (from 2 to ffff).
+
+=item B<filter_network>
+
+Network list for hashing filters generation. Makes sence only for B<u32>
+method.
+To improve classification performance you may use one hashing filter for
+many networks.
+For example, if you have the following network configuration
+
+	network = 10.0.0.0/20 10.0.253.0/24 10.0.254.0/24
+
+you should specify a single 10.0.0.0/16 network to classify traffic
+by a single hashing filer
+
+	filter_network = 10.0.0.0/16
+
+Default value: same as B<network> parameter.
+
+Possible values: a list of network with mask from 16 to 31 that is equivalent
+or includes the networks specified in B<network> parameter.
 
 =item B<set_size>
 
 Size of IP hash for ipset(8).
+
 Default value: 65536.
+
 Possible values: from 1024 to 65536.
 
 =item B<chain>
 
-Name of iptables(8) chain that will contain rules for shaped IP's.
+Name of iptables(8) chain that will contain rules for shaped IPs.
+
 Default value: FORWARD.
-For names other than FORWARD the new chain will be created and
-attached to FORWARD chain.
+
+For names other than FORWARD the new chain will be created and attached to
+FORWARD chain.
 
 =item B<quantum>
 
 Amount of bytes a stream is allowed to dequeue before the next queue gets a
 turn.
+
 Default value: 1500.
+
 Possible values: integer numbers >= MTU of the interface.
 
 =item B<rate_unit>
 
 Default rate unit.
+
 Default value: kibit.
+
 Possible values: see sc(8).
 
 =item B<leaf_qdisc>
 
 Leaf queueing discipline with parameters. This string will be used as a tail
 of corresponding C<tc qdisc ...> command line.
-Default value: 'pfifo limit 50'.
+
+Default value: C<pfifo limit 50>.
+
 Possible values: all classless qdiscs supported by tc(8).
 
 =item B<db_host>
 
 Database host.
+
 Default value: 127.0.0.1.
+
 Possible values: IP-address or domain name.
 
 =item B<db_driver>
 
 Database driver.
+
 Default value: SQLite.
+
 Possible values: all database drivers supported by Perl DBI module.
 See output of C<sc help> command for the list of available drivers.
 
 =item B<db_user>
 
 Username to use when connecting to database.
+
 Default value: user.
+
 Possible values: depends on database server.
 
 =item B<db_pass>
 
 The password to use when connecting to database. Remember that specifying a
 password on the command line is insecure.
+
 Default value: password.
+
 Possible values: arbitrary string.
 
 =item B<db_name>
 
 Database name to use.
+
 Default value: sc.db.
+
 Possible values: arbibrary string (should be a valid filename in case of
 SQLite driver).
 
@@ -171,19 +259,19 @@ F</etc/sc/sc.db>.
 
 =over 16
 
-=item B<query_create> 
+=item B<query_create>
 
-create table with C<ip> and C<rate> columns.
+Create table with C<ip> and C<rate> columns.
 
-=item B<query_load> 
+=item B<query_load>
 
-select all data from table.
+Select all data from table.
 
 =item B<query_list>
 
-select data for one IP.
+Select data for one IP.
 
-=item B<query_add> 
+=item B<query_add>
 
 add new entry.
 
@@ -241,7 +329,7 @@ Possible values: see Sys::Syslog(3), section C<Facilities>.
 
 =head1 SEE ALSO
 
-sc(8), AppConfig(3), Sys::Syslog(3), tc(8), iptables(8), ipset(8).
+sc(8), tc(8), iptables(8), ipset(8), AppConfig(3), Sys::Syslog(3).
 
 =head1 AUTHOR
 

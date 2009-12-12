@@ -4,18 +4,84 @@
 
 use strict;
 use warnings;
+use Getopt::Long;
 
-my $max3 = 10;
+my $PROG = 'genbase';
+my $VERSION = '0.1';
+
+my $ip_i;
+my $ip_f;
+my $create = 0;
+my $help = 0;
+
+my %optd = (
+	'i=s' => \$ip_i,
+	'f=s' => \$ip_f,
+	'create|c!' => \$create,
+	'help|h!' => \$help,
+);
+
+GetOptions(%optd) or exit 1;
+
+usage(0) if $help;
+usage(1) if !defined $ip_i || !defined $ip_f;
+
+my $intip_i = ip_texttoint($ip_i);
+my $intip_f = ip_texttoint($ip_f);
+
+die "IP interval ${ip_i}-${ip_f} is incorrect" if $intip_i > $intip_f;
 
 open my $SCH, '|-', "./sc -b";
 
-print $SCH "dbcreate\n";
+print $SCH "dbcreate\n" if $create;
 
-for my $i (0..$max3) {
-	for my $j (1..254) {
-		my $random = 2**(int( rand(9)) + 7);
-		print $SCH "dbadd 172.16.$i.$j ${random}Kibit\n"
-	}
+for my $i ($intip_i .. $intip_f) {
+	my $random = 2**(int(rand(9)) + 7);
+	print $SCH "dbadd ", ip_inttotext($i), " ${random}kibit\n";
 }
 close $SCH;
+
+# end
+
+sub ip_texttoint
+{
+	my $ip = shift;
+	my @oct = split /\./ixms, $ip;
+	my $int = 0;
+	for my $i (0..3) {
+		$int += $oct[$i]*( 1 << 8*(3-$i) );
+	}
+	return $int;
+}
+
+sub ip_inttotext
+{
+	my $int = shift;
+	my @oct;
+
+	for my $i (0..3) {
+		my $div = 1 << 8*(3-$i);
+		$oct[$i] = int($int/$div);
+		$int %= $div;
+	}
+
+	return join '.', @oct;
+}
+
+sub usage
+{
+	my $ret = shift;
+	print STDERR <<"EOF"
+$PROG (version $VERSION) - generator of random data for sc databases
+
+Usage:	$PROG [-c|--create] -i <init-ip> -f <final-ip>
+
+Example:
+	$PROG -c -i 172.16.0.1 -f 172.16.5.255
+	$PROG -i 10.0.0.1 -f 10.0.1.255
+
+EOF
+;
+	exit($ret);
+}
 

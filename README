@@ -18,28 +18,29 @@ Source code repositories:
 Installation
 ============
 
-0. Install Linux kernel that supports "flow" classifier (version 2.6.25 or
-higher, with option CONFIG_NET_CLS_FLOW=m or y).
+0. Install Linux kernel that supports "u32" classifier (CONFIG_NET_CLS_U32),
+generic actions (CONFIG_NET_CLS_ACT, CONFIG_NET_CLS_GACT), and "flow"
+classifier (CONFIG_NET_CLS_FLOW).
 
-1. Install Perl 5 and the following modules: 
-AppConfig, Getopt::Long, DBI, DBD-module for your database (DBD::mysql,
-DBD::SQLite, etc), Pod::Usage.
+1. Install Perl 5 and the following modules:
+AppConfig, DBI, DBD-module for your database (DBD::Pg, DBD::SQLite,
+DBD::mysql, etc), Getopt::Long, Pod::Usage, Term::ANSIColor, Sys::Syslog.
 
   a. Installation from package repository of your Linux distribution
      (recommended way).
 
      Example for Debian:
-       apt-get install perl-doc perl-modules libdbi-perl libdbd-sqlite3-perl \
-       libappconfig-perl
+       aptitude install perl perl-base perl-doc perl-modules libdbi-perl \
+	     libdbd-sqlite3-perl libappconfig-perl
 
-  b. Installation of non-core modules from CPAN.
-    cpan DBI DBD::SQLite Pod::Usage AppConfig
+  b. Installation of modules from CPAN.
+    cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage Term::ANSIColor \
+	  Sys::Syslog
 
-2. Install fresh iproute2 suite that supports "flow" classifier.
+2. Install iproute2 suite.
 
-3. Install iptables.
-
-4. Install ipset (http://ipset.netfilter.org/).
+3. Install iptables and ipset <http://ipset.netfilter.org/> if you plan to use
+"flow" classifier.
 
 5. Install sc.
   make install
@@ -48,9 +49,9 @@ If you want to create shaping rules at startup and clear them at shutdown, you
 should prepare init script. sc comes with init script sc.init for Debian and
 other distributions with compatible initialization scheme. To install it just
 type
-  cp sc.init /etc/init.d/sc
+  install -o root -g root -m 755 sc.init /etc/init.d/sc
 
-and don't forget to update rc.d symlinks.
+and don't forget to update symlinks
   update-rc.d sc defaults
 
 
@@ -78,16 +79,16 @@ Example:
 
 2. Synchronization with database
 
-To perform synchronization of shaping rules with database you should add
-a corresponding line to your crontab file. In the following example
+To perform synchronization of shaping rules with database you should add a
+corresponding line to your crontab file. In the following example
 synchronization of rules will be performed every 10 minutes.
 
 */10 * * * * root /usr/local/sbin/sc sync
 
 3. Syslog
 
-sc can log errors and warnings through syslog. To turn on this
-feature, set the "syslog" option to 1 in /etc/sc/sc.conf.
+sc can log errors and warnings through syslog. To turn on this feature, set
+the "syslog" option to 1 in /etc/sc/sc.conf.
 
 Testing & Usage
 ===============

@@ -492,7 +492,7 @@ sub set_filter_nets {
 	# I restrict this value to a 0x799 to avoid discontinuity of filter space.
 	# Real maximum number of u32 hash tables is 0xfff.
 	my $ht_max = 1945;
-	
+
 	# initial numbers for hash tables of 1st and 2nd nesting levels
 	my $ht1 = $ht_min;
 	my $ht2 = $ht1 + 256;
@@ -547,7 +547,7 @@ sub set_class_nets
 		$class_nets{$n}{'invmask'} = $invmask;
 		$class_nets{$n}{'intip_i'} = $ip_i;
 		$class_nets{$n}{'intip_f'} = $ip_i + $invmask;
-		
+
 		$class_nets{$n}{'classid_i'} = $cid_i;
 		$cid_i += $invmask + 1;
 		log_croak("network $n overfulls classid space")
@@ -1859,18 +1859,22 @@ Sys::Syslog, Term::ANSIColor.
 
 =head2 Command-line tools
 
-tc(8) from B<Iproute2> suite.
+tc(8) from B<iproute2> suite.
 
 =head2 Linux kernel configuration
 
-B<u32> classifier (option B<CONFIG_NET_CLS_U32>=m or y)
+=over
 
+=item B<u32> classifier (option B<CONFIG_NET_CLS_U32>=m or y)
+
+=item Traffic control actions (B<CONFIG_NET_CLS_ACT>=y and
+B<CONFIG_NET_CLS_GACT>=m or y)
 
 =head1 COREQUISITES
 
-If you prefer B<flow> filtering method, you will need to install iptables(8)
-and ipset(8), B<flow> classifier (requires kernel version 2.6.25 or above,
-option B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> modules (see
+If you prefer to use B<flow> filtering method, you will need to install
+iptables(8) and ipset(8), B<flow> classifier (kernel version 2.6.25 or above,
+option B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> kernel modules (see
 L<http://ipset.netfilter.org/> for details).
 
 
@@ -1882,14 +1886,14 @@ L<http://ipset.netfilter.org/> for details).
 
 Add rules for specified IP
 
-=item B<change> | B<mod> <I<ip>> <I<rate>>
-
-Change rate for specified IP
-
 =item B<calc> [I<ip>]
 
 Calculate and print internally used variables: classids, hash table numbers
 and keys.
+
+=item B<change> | B<mod> <I<ip>> <I<rate>>
+
+Change rate for specified IP
 
 =item B<dbadd> <I<ip>> <I<rate>>
 
@@ -1933,9 +1937,9 @@ List rules in human-readable form. If no IP specified, all entries are listed.
 
 Load IPs and rates from database and create ruleset
 
-=item B<man>
+=item B<ratecvt> <I<rate>> <I<unit>>
 
-Generate and show manpage.
+Convert rate from one unit to another
 
 =item B<reload> | B<restart>
 
@@ -1945,13 +1949,13 @@ Reset rules and load database
 
 Delete all shaping rules
 
-=item B<ratecvt> <I<rate>> <I<unit>>
-
-Convert rate from one unit to another
-
 =item B<show> [I<ip>]
 
 Show rules explicitly. If no IP specified, all entries are listed.
+
+=item B<status>
+
+Show status of shaping rules
 
 =item B<sync>
 
@@ -1959,7 +1963,7 @@ Synchronize rules with database
 
 =item B<version>
 
-Show version
+Output version
 
 =back
 
@@ -2069,9 +2073,9 @@ Database password
 =head1 RATE UNITS
 
 All rates should be specified as integer numbers, possibly followed by a unit.
-Bare number means the default unit, i.e. kibit.
-You can set another default unit by changing B<rate_unit> parameter in
-configuration file or by setting B<--rate_unit> command line option.
+Bare number means that you use the default unit, i.e. kibit.
+You can set another default unit by changing C<rate_unit> parameter in
+configuration file or by setting the similar command line option.
 
 =over 18
 
@@ -2162,10 +2166,18 @@ C<sc del 172.16.0.1>
 By default B<sc> reads F</etc/sc/sc.conf> file and uses SQLite database
 F</etc/sc/sc.db>. See sc.conf(5) for details.
 
-=head1 BUGS AND RESTRICTIONS
+
+=head1 BUGS
+
+Return values are not always processed accurately and no checks are performed
+before execution of any commands due to performance reasons.
+
+
+=head1 RESTRICTIONS
 
 Due to limited number of classids (from 2 to ffff) you can only shape 65534
 different hosts on a single interface.
+You can overcome this limitation with virtual interfaces (IFB or IMQ).
 
 C<Flow> classifier works only with IPs that have different last two
 octets.
@@ -2183,9 +2195,11 @@ sc.conf(5), tc(8), tc-htb(8), iptables(8), ipset(8),
 L<http://lartc.org/howto/lartc.adv-filter.hashing.html>,
 L<http://www.mail-archive.com/netdev@vger.kernel.org/msg60638.html>.
 
+
 =head1 AUTHOR
 
 Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
+
 
 =head1 LICENSE AND COPYRIGHT
 
@@ -2193,9 +2207,11 @@ Copyright (c) 2008, 2009. Stanislav Kruchinin.
 
 License: GPL v2 or later.
 
+
 =head1 README
 
 Administration tool for Linux-based ISP traffic shaper.
+
 
 =pod OSNAMES
 

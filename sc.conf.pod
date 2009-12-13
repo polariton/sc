@@ -15,13 +15,11 @@ B<sc.conf> - configuration file for sc(8).
 
 =head1 DESCRIPTION
 
-The file F<sc.conf> contains configuration information for shaper control tool
-sc(8).
-
 The sc.conf is parsed using C<AppConfig> module and has a simple C<variable =
 value> form.
+Expansion for internal and environment variables is enabled (see AppConfig(3) for details).
 The file may contain extra tabs and newlines for formatting.
-Comments begin with the B<#> character and end at the end of line, just like
+Comments begin with the B<#> character and end at the end of line, like
 in shell or Perl scripts.
 
 =head1 OPTIONS
@@ -48,11 +46,11 @@ Possible values:
 
 =item B<flow>
 
-flow classifier and ipset(8) for access control.
+use flow classifier and ipset(8) for access control.
 
 =item B<u32>
 
-u32 hashing filters.
+use u32 hashing filters.
 
 =back
 
@@ -124,19 +122,22 @@ Possible values:
 
 =item B<ipmap>
 
-Stores IPs from one /16 network defined by C<network> parameter (fast and
-memory cheap).
+for IPs from one /16 network defined by C<network> parameter (very fast and
+memory cheap)
 
 =item B<iphash>
 
-Stores IPs from arbitrary /16 networks (slower).
+for IPs from arbitrary /16 networks
 
 =back
 
 =item B<network>
 
-Network for ipmap set, if you use B<flow> filtering method.
-Network list for classid calculation, if you use B<u32>.
+If you use filter_method = flow, this variable defines the network for ipmap
+set.
+When filter_method = u32, it should contain the list of networks for classid
+calculation.
+This networks must cover all IPs which you are going to use in shaping rules.
 
 Default value: 172.16.0.0/16
 
@@ -150,8 +151,8 @@ maximum number of child classes, e.g. 65534 (from 2 to ffff).
 
 Network list for hashing filters generation. Makes sence only for B<u32>
 method.
-To improve classification performance you may use one hashing filter for
-many networks.
+To improve the classification performance you may specify here a summarized
+network just like in case of supernetting (route aggregation).
 For example, if you have the following network configuration
 
 	network = 10.0.0.0/20 10.0.253.0/24 10.0.254.0/24

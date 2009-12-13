@@ -19,7 +19,7 @@ Installation
 ============
 
 0. Install Linux kernel that supports "u32" classifier (CONFIG_NET_CLS_U32),
-generic actions (CONFIG_NET_CLS_ACT, CONFIG_NET_CLS_GACT), and "flow"
+traffic control actions (CONFIG_NET_CLS_ACT, CONFIG_NET_CLS_GACT), and "flow"
 classifier (CONFIG_NET_CLS_FLOW).
 
 1. Install Perl 5 and the following modules:
@@ -30,29 +30,29 @@ DBD::mysql, etc), Getopt::Long, Pod::Usage, Term::ANSIColor, Sys::Syslog.
      (recommended way).
 
      Example for Debian:
-       aptitude install perl perl-base perl-doc perl-modules libdbi-perl \
+     # aptitude install perl perl-base perl-doc perl-modules libdbi-perl \
 	     libdbd-sqlite3-perl libappconfig-perl
 
   b. Installation of modules from CPAN.
-    cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage Term::ANSIColor \
-	  Sys::Syslog
+     # cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage Term::ANSIColor \
+	   Sys::Syslog
 
 2. Install iproute2 suite.
 
-3. Install iptables and ipset <http://ipset.netfilter.org/> if you plan to use
+3. Install iptables and ipset <http://ipset.netfilter.org/> if you want to use
 "flow" classifier.
 
-5. Install sc.
-  make install
+5. Install sc, manpages, configuration file and init script.
 
-If you want to create shaping rules at startup and clear them at shutdown, you
-should prepare init script. sc comes with init script sc.init for Debian and
-other distributions with compatible initialization scheme. To install it just
-type
-  install -o root -g root -m 755 sc.init /etc/init.d/sc
+# make install
 
-and don't forget to update symlinks
-  update-rc.d sc defaults
+SC comes with init script that is installed to location /etc/init.d/sc.
+
+To enable autostart of shaper you should create symlinks in runlevel
+directories. In Debian and related distributives you may use the following
+command
+
+# update-rc.d sc defaults
 
 
 Configuration
@@ -60,24 +60,29 @@ Configuration
 
 1. Database settings
 
-By default, sc uses SQLite database at /etc/sc/sc.db, but it can use any other
-DBI-compatible database like MySQL, PostgreSQL or Oracle. You must configure
-database driver and SQL-queries that will produce correct output for sc. It is
-assumed that IP-addresses and bandwidth rates are stored as integer numbers
-(see query_create value). Default and recommended rate unit is 1 Kibit/s =
-1024 bit/s. Remember that IP-addresses must differ in two last octets, because
-they are used for deterministic mapping to a tc classid's.
+By default, sc stores it's data in SQLite database at /etc/sc/sc.db, but it can
+use any other DBI-compatible database like MySQL, PostgreSQL or Oracle. If you
+plan to load data from a remote database on a dedicated billing server, you
+must install corresponding Perl DBD module, configure database driver and
+SQL-queries that will produce correct output for sc.  First column must contain
+an IP-addresses in integer representation, and second column provides the
+integer bandwith rate values (see default value of "query_create" parameter).
+
+Rate units are defined by the "rate_unit" parameter in sc.conf or by similar
+command line option. Default rate unit is 1 Kibit/s = 1024 bit/s.
 
 If you plan to use shaper with it's own SQLite database, you need to create it
 and add some data.
 
-Example:
-  sc dbcreate
-  sc dbadd 172.16.0.1 10Mibit
-  sc dbadd 172.16.0.2 20Mibit
+# sc dbcreate
+# sc dbadd 172.16.0.1 10Mibit
+# sc dbadd 172.16.0.2 20Mibit
+
+You also may use "genbase" script to generate some database entries with random
+values of bandwidth rates.
 
 
-2. Synchronization with database
+2. Synchronization of rules with database
 
 To perform synchronization of shaping rules with database you should add a
 corresponding line to your crontab file. In the following example
@@ -87,8 +92,8 @@ synchronization of rules will be performed every 10 minutes.
 
 3. Syslog
 
-sc can log errors and warnings through syslog. To turn on this feature, set
-the "syslog" option to 1 in /etc/sc/sc.conf.
+SC can log errors and warnings through syslog. To enable this feature set the
+"syslog" option to 1 in /etc/sc/sc.conf.
 
 Testing & Usage
 ===============

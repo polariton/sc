@@ -290,10 +290,11 @@ my %optd = (
 my %db_data;
 my %rul_data;
 
-# handlers and pointers for batch execution
+# handlers and pointers for command execution
 my ($TC_H, $IPS_H);
 my $TC = \&sys_tc;
 my $IPS = \&sys_ips;
+my $sys;
 
 ##############################################################################
 # Main routine
@@ -434,9 +435,41 @@ sub main
 	return $ret;
 }
 
-# set function pointers depending on filtering method
+# system wrappers for different debug modes
+sub sys_quiet
+{
+	my $c = shift;
+	return system "$c >/dev/null 2>&1";
+}
+
+sub sys_debug_print
+{
+	my $c = shift;
+	print "$c\n";
+	return 0;
+}
+
+sub sys_debug_on
+{
+	my $c = shift;
+	system "$c";
+	print "$c\n" if $?;
+	return $?;
+}
+
+# set function pointers
 sub set_ptrs
 {
+	if ($debug == $DEBUG_OFF) {
+		$sys = ($quiet) ? \&sys_quiet : sub { return system @_ };
+	}
+	elsif ($debug == $DEBUG_ON) {
+		$sys = \&sys_debug_on;
+	}
+	elsif ($debug == $DEBUG_PRINT) {
+		$sys = \&sys_debug_print;
+	}
+
 	if ($filter_method eq 'flow') {
 		$rul_init = \&rul_init_flow;
 		$rul_add = \&rul_add_flow;
@@ -485,17 +518,20 @@ sub set_ptrs
 
 # fill filter_nets hash
 sub set_filter_nets {
-	# Real minimal number of u32 hash tables is 1.
-	# 0x100 is taken for simplicity.
-	my $ht_min = 256;
-
 	# I restrict this value to a 0x799 to avoid discontinuity of filter space.
 	# Real maximum number of u32 hash tables is 0xfff.
 	my $ht_max = 1945;
 
-	# initial numbers for hash tables of 1st and 2nd nesting levels
-	my $ht1 = $ht_min;
-	my $ht2 = $ht1 + 256;
+	# Initial numbers for hash tables of 1st and 2nd nesting levels
+	#
+	# Real minimal number of u32 hash tables is 1.
+	# 0x100 is taken for simplicity.
+	my $ht1 = 256;
+	# Difference between initial numbers for hash tables of 1st and 2nd nesting
+	# levels. Increase this value if you want to set more than 255 netmasks to
+	# filter_network parameter.
+	my $ht_21 = 256;
+	my $ht2 = $ht1 + $ht_21;
 
 	foreach my $n (split /\ /ixms, $filter_network) {
 		my ($netip, $netmask) = split /\//ixms, $n;
@@ -758,37 +794,6 @@ sub log_warn
 	log_syslog('warning', $msg) if $syslog;
 	print STDERR "$PROG: $msg\n";
 	return $!;
-}
-
-# system with debug
-sub sys
-{
-	my $c = shift;
-
-	if ($debug == $DEBUG_PRINT) {
-		print "$c\n";
-	}
-	else {
-		if ($quiet) {
-			system "$c >/dev/null 2>&1";
-		}
-		else {
-			system "$c";
-		}
-	}
-	if ($? && $debug == $DEBUG_ON) {
-		print "$c\n";
-	}
-
-	return $?;
-}
-
-# silent system
-sub ssys
-{
-	my $c = shift;
-	system "$c >/dev/null 2>&1";
-	return $?;
 }
 
 sub db_connect
@@ -1065,13 +1070,17 @@ sub rul_init_flow
 
 sub rul_init_ipt
 {
-	sys("$iptables --policy FORWARD DROP");
+	$sys->("$iptables --policy FORWARD DROP");
 	if ($chain_name ne 'FORWARD') {
-		sys("$iptables --new-chain $chain_name");
-		sys("$iptables -A FORWARD -j $chain_name");
+		$sys->("$iptables --new-chain $chain_name");
+		$sys->("$iptables -A FORWARD -j $chain_name");
 	}
-	sys("$iptables -A $chain_name -p all -m set --set $set_name src -j ACCEPT");
-	sys("$iptables -A $chain_name -p all -m set --set $set_name dst -j ACCEPT");
+	$sys->(
+		"$iptables -A $chain_name -p all -m set --set $set_name src -j ACCEPT"
+	);
+	$sys->(
+		"$iptables -A $chain_name -p all -m set --set $set_name dst -j ACCEPT"
+	);
 
 	return $?;
 }
@@ -1158,16 +1167,16 @@ sub rul_show_flow
 
 	if (!nonempty($ips[0])) {
 		cprint('bold', "QDISCS:\n");
-		sys "$tc -i -s -d qdisc show dev $i_if";
-		sys "$tc -i -s -d qdisc show dev $o_if";
+		system "$tc -i -s -d qdisc show dev $i_if";
+		system "$tc -i -s -d qdisc show dev $o_if";
 		cprint('bold', "\nCLASSES:\n");
-		sys "$tc -i -s -d class show dev $i_if";
-		sys "$tc -i -s -d class show dev $o_if";
+		system "$tc -i -s -d class show dev $i_if";
+		system "$tc -i -s -d class show dev $o_if";
 		cprint('bold', "\nFILTERS:\n");
-		sys "$tc -s -d filter show dev $i_if";
-		sys "$tc -s -d filter show dev $o_if";
+		system "$tc -s -d filter show dev $i_if";
+		system "$tc -s -d filter show dev $o_if";
 		cprint('bold', "\nIPTABLES RULES:\n");
-		sys "$iptables -nL";
+		system "$iptables -nL";
 
 		return $?;
 	}
@@ -1214,14 +1223,14 @@ sub rul_show_u32
 
 	if (!nonempty($ips[0])) {
 		cprint('bold', "QDISCS:\n");
-		sys "$tc -i -s -d qdisc show dev $i_if";
-		sys "$tc -i -s -d qdisc show dev $o_if";
+		system "$tc -i -s -d qdisc show dev $i_if";
+		system "$tc -i -s -d qdisc show dev $o_if";
 		cprint('bold', "\nCLASSES:\n");
-		sys "$tc -i -s -d class show dev $i_if";
-		sys "$tc -i -s -d class show dev $o_if";
+		system "$tc -i -s -d class show dev $i_if";
+		system "$tc -i -s -d class show dev $o_if";
 		cprint('bold', "\nFILTERS:\n");
-		sys "$tc -s -d filter show dev $i_if";
-		sys "$tc -s -d filter show dev $o_if";
+		system "$tc -s -d filter show dev $i_if";
+		system "$tc -s -d filter show dev $o_if";
 
 		return $?;
 	}
@@ -1272,27 +1281,27 @@ sub rul_show_u32
 sub rul_reset_ips
 {
 	if ($chain_name ne 'FORWARD') {
-		sys("$iptables --delete FORWARD -j $chain_name");
-		sys("$iptables --flush $chain_name");
-		sys("$iptables --delete-chain $chain_name");
+		$sys->("$iptables --delete FORWARD -j $chain_name");
+		$sys->("$iptables --flush $chain_name");
+		$sys->("$iptables --delete-chain $chain_name");
 	}
 	else {
-		sys("$iptables -D $chain_name -p all -m set --set $set_name src ".
+		$sys->("$iptables -D $chain_name -p all -m set --set $set_name src ".
 			"-j ACCEPT");
-		sys("$iptables -D $chain_name -p all -m set --set $set_name dst ".
+		$sys->("$iptables -D $chain_name -p all -m set --set $set_name dst ".
 			"-j ACCEPT");
 	}
 
-	sys("$ipset --flush $set_name");
-	sys("$ipset --destroy $set_name");
+	$sys->("$ipset --flush $set_name");
+	$sys->("$ipset --destroy $set_name");
 
 	return $?;
 }
 
 sub rul_reset_tc
 {
-	sys("$tc qdisc del dev $o_if root handle 1: htb");
-	sys("$tc qdisc del dev $i_if root handle 1: htb");
+	$sys->("$tc qdisc del dev $o_if root handle 1: htb");
+	$sys->("$tc qdisc del dev $i_if root handle 1: htb");
 
 	return $?;
 }
@@ -1418,7 +1427,7 @@ sub usage
 sub sys_tc
 {
 	my $c = shift;
-	return sys "$tc $c";
+	return $sys->("$tc $c");
 }
 
 sub batch_tc
@@ -1453,7 +1462,7 @@ sub batch_stop_tc
 sub sys_ips
 {
 	my $c = shift;
-	return sys "$ipset $c";
+	return $sys->("$ipset $c");
 }
 
 sub batch_ips

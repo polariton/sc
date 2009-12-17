@@ -29,19 +29,21 @@ usage(1) if !defined $ip_i || !defined $ip_f;
 my $intip_i = ip_texttoint($ip_i);
 my $intip_f = ip_texttoint($ip_f);
 
-die "IP interval ${ip_i}-${ip_f} is incorrect" if $intip_i > $intip_f;
+if ($intip_i > $intip_f || $intip_f - $intip_i > 2**16 - 1) {
+	die "IP interval ${ip_i}-${ip_f} is incorrect";
+}
 
 open my $SCH, '|-', "./sc -b";
 
 print $SCH "dbcreate\n" if $create;
 
 for my $i ($intip_i .. $intip_f) {
-	my $random = 2**(int(rand(9)) + 7);
+	my $random = 1 << (int(rand(9)) + 7);
 	print $SCH "dbadd ", ip_inttotext($i), " ${random}kibit\n";
 }
 close $SCH;
 
-# end
+exit(0);
 
 sub ip_texttoint
 {

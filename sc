@@ -60,11 +60,6 @@ my $filter_network = $network;
 my $filter_method = 'u32';
 my (%filter_nets, %class_nets);
 
-# leaf filter preference
-my $u32_lpref = '20';
-# parent hashing filter number
-my $u32_pht = '400';
-
 my $syslog = 0;
 my $syslog_options = q{};
 my $syslog_facility = 'user';
@@ -231,8 +226,7 @@ my $E_UNDEF    = 3;
 my $E_EXIST    = 4;
 my $E_NOTEXIST = 5;
 my $E_CMD      = 6;
-my $E_RUL      = 7;
-my $E_PRIV     = 8;
+my $E_PRIV     = 7;
 
 # global return value
 my $RET = $E_OK;
@@ -259,18 +253,18 @@ my %optd = (
 	'd|debug=i'         => \$debug,
 	'v|verbose!'        => \$verbose,
 	'q|quiet!'          => \$quiet,
-	'colored!'          => \$colored,
+	'c|colored!'        => \$colored,
 	'j|joint!'          => \$joint,
 	'b|batch!'          => \$batch,
-	's|set_name=s'      => \$set_name,
-	'set_type=s'        => \$set_type,
-	'set_size=s'        => \$set_size,
 	'N|network=s'       => \$network,
 	'filter_network=s'  => \$filter_network,
-	'c|chain=s'         => \$chain_name,
 	'quantum=s'         => \$quantum,
 	'u|rate_unit=s'     => \$rate_unit,
 	'leaf_qdisc=s'      => \$leaf_qdisc,
+	'chain=s'           => \$chain_name,
+	's|set_name=s'      => \$set_name,
+	'set_type=s'        => \$set_type,
+	'set_size=s'        => \$set_size,
 	'db_driver=s'       => \$db_driver,
 	'db_host=s'         => \$db_host,
 	'db_name=s'         => \$db_name,
@@ -452,8 +446,7 @@ sub sys_debug_print
 sub sys_debug_on
 {
 	my $c = shift;
-	system "$c";
-	print "$c\n" if $?;
+	print "$c\n" if system "$c";
 	return $?;
 }
 
@@ -503,12 +496,8 @@ sub set_ptrs
 		$rul_add = \&rul_add_u32;
 		$rul_del = \&rul_del_u32;
 		$rul_change = \&rul_change_tc;
-		$rul_batch_start = sub {
-			batch_start_tc() if !$verbose;
-		};
-		$rul_batch_stop = sub {
-			batch_stop_tc() if !$verbose;
-		};
+		$rul_batch_start = sub { batch_start_tc() if !$verbose; };
+		$rul_batch_stop = sub { batch_stop_tc() if !$verbose; };
 		$rul_load = \&rul_load_u32;
 		$rul_show = \&rul_show_u32;
 		$rul_reset = \&rul_reset_tc;
@@ -592,10 +581,6 @@ sub set_class_nets
 	return;
 }
 
-##############################################################################
-# Internal subroutines
-#
-
 sub nonempty
 {
 	my $str = shift;
@@ -658,12 +643,6 @@ sub arg_check
 	return $result;
 }
 
-# sort by hash table
-sub by_ht
-{
-	return $filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'};
-}
-
 # calculate tc classid from text form of IP
 sub ip_classid
 {
@@ -701,8 +680,8 @@ sub ip_leafht_key
 			# 3rd octet
 			my $ht_offset = ($intip & $filter_nets{$n}{'invmask'}) >> 8;
 			# 4th octet
-			$key = $intip & 0xff;
-			$leafht = $filter_nets{$n}{'leafht_i'} + $ht_offset;
+			$key = sprintf('%x', $intip & 0xff);
+			$leafht = sprintf('%x', $filter_nets{$n}{'leafht_i'} + $ht_offset);
 			last;
 		}
 	}
@@ -710,13 +689,13 @@ sub ip_leafht_key
 		"$ip does not belong to any of specified networks: $network"
 	) if !defined $leafht;
 
-	return (sprintf('%x', $leafht), sprintf('%x', $key));
+	return ($leafht, $key);
 }
 
-# calculate divisor and hashkey mask from netmask
+# calculate divisor and hashkey mask
 #
-# netmask = mask in numeric form
-# n = number of octet to be used in filter
+# netmask = mask in decimal form
+# n = number of octet
 sub div_hmask_u32
 {
 	my ($netmask, $n) = @_;
@@ -849,9 +828,7 @@ sub db_load
 sub rul_add_flow
 {
 	my ($ip, $cid, $rate) = @_;
-
 	my $ceil = $rate;
-	my $ret = 0;
 
 	$TC->(
 		"class replace dev $o_if parent 1: classid 1:$cid htb rate $rate ".
@@ -965,7 +942,7 @@ sub rul_change_tc
 sub rul_load_flow
 {
 	my ($ip, $cid, $rate);
-	my $ret = 0;
+	my $ret = $E_OK;
 
 	open my $IPH, '-|', "$ipset -nsL $set_name" or
 		log_croak("unable to open pipe for $ipset");
@@ -1006,7 +983,7 @@ sub rul_load_flow
 sub rul_load_u32
 {
 	my ($ip, $cid, $rate);
-	my $ret = 0;
+	my $ret = $E_OK;
 
 	open my $TCFH, '-|', "$tc -p filter show dev $i_if"
 		or log_croak("unable to open pipe for $tc");
@@ -1054,7 +1031,6 @@ sub rul_init_flow
 		"flow map key dst and 0xffff"
 	);
 
-	# create iphash and rules for allowed IPs
 	if ($set_type eq 'ipmap') {
 		$IPS->("-N $set_name $set_type --network $network");
 	}
@@ -1089,15 +1065,14 @@ sub rul_init_u32
 {
 	my ($dev, $match, $offset) = @_;
 
-	# root qdisc
 	$TC->("qdisc add dev $dev root handle 1: htb");
 
-	# hashing filters
 	$TC->(
 		"filter add dev $dev parent 1:0 pref 10 protocol ip u32"
 	);
 
-	foreach my $net (sort by_ht keys %filter_nets) {
+	foreach my $net (sort { $filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'} }
+	  keys %filter_nets) {
 		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
 		my $netmask = $filter_nets{$net}{'mask'};
 
@@ -1152,6 +1127,7 @@ sub rul_init_u32
 		}
 	}
 
+	# block all other traffic
 	$TC->(
 		"filter add dev $dev parent 1:0 protocol ip pref 30 u32 ".
 		"match u32 0x0 0x0 at 0 police mtu 1 action drop"
@@ -1184,7 +1160,6 @@ sub rul_show_flow
 	foreach my $ip (@ips) {
 		my $cid = ip_classid($ip);
 
-		# tc qdisc
 		print_rules(
 			"TC rules for $ip\n\nInput qdisc [$i_if, $cid]:",
 			"$tc -i -s -d qdisc show dev $i_if | ".
@@ -1196,7 +1171,6 @@ sub rul_show_flow
 			"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 		);
 
-		# tc class
 		print_rules(
 			"\nInput class [$i_if, $cid]:",
 			"$tc -i -s -d class show dev $i_if | ".
@@ -1208,7 +1182,6 @@ sub rul_show_flow
 			"fgrep -w -A 3 \"leaf $cid\:\""
 		);
 
-		# ipset
 		print_rules("\nIPSet entry for $ip:", "$ipset -T $set_name $ip");
 		print "\n";
 	}
@@ -1286,10 +1259,14 @@ sub rul_reset_ips
 		$sys->("$iptables --delete-chain $chain_name");
 	}
 	else {
-		$sys->("$iptables -D $chain_name -p all -m set --set $set_name src ".
-			"-j ACCEPT");
-		$sys->("$iptables -D $chain_name -p all -m set --set $set_name dst ".
-			"-j ACCEPT");
+		$sys->(
+			"$iptables -D $chain_name -p all -m set --set $set_name src ".
+			"-j ACCEPT"
+		);
+		$sys->(
+			"$iptables -D $chain_name -p all -m set --set $set_name dst ".
+			"-j ACCEPT"
+		);
 	}
 
 	$sys->("$ipset --flush $set_name");
@@ -1441,7 +1418,7 @@ sub batch_start_tc
 {
 	if ($debug == $DEBUG_PRINT) {
 		open $TC_H, '>', "tc.batch"
-			or log_croak("unable to open tc.out");
+			or log_croak("unable to open tc.batch");
 	}
 	else {
 		open $TC_H, '|-', "$tc -batch"
@@ -1469,14 +1446,14 @@ sub batch_ips
 {
 	my $c = shift;
 	print $IPS_H "$c\n";
-	return
+	return 0;
 }
 
 sub batch_start_ips
 {
 	if ($debug == $DEBUG_PRINT) {
 		open $IPS_H, '>', "ipset.batch"
-			or log_croak("unable to open ipset.out");
+			or log_croak("unable to open ipset.batch");
 	}
 	else {
 		open $IPS_H, '|-', "$ipset --restore"
@@ -1647,7 +1624,7 @@ sub cmd_status
 
 	if ($out[0] !~ /^qdisc\ htb/xms) {
 		print STDERR "$PROG: no shaping rules found\n";
-		return 1;
+		return $E_UNDEF;
 	}
 
 	my @lqd = split /\ /xms, $leaf_qdisc;
@@ -1662,7 +1639,7 @@ sub cmd_status
 		}
 	}
 	print STDERR "$PROG: htb qdisc found but there is no child queues\n";
-	return 2;
+	return $E_NOTEXIST;
 }
 
 sub cmd_ver
@@ -1681,8 +1658,7 @@ sub cmd_help
 		pod2usage({ -exitstatus => "NOEXIT", -verbose => 99,
 			-sections => "SYNOPSIS|COMMANDS|OPTIONS", -output => \*STDOUT });
 		print "Available database drivers:\n";
-		print map { "    $_\n" } DBI->available_drivers;
-		print "\n";
+		print '    ', join(', ', DBI->available_drivers), "\n";
 	}
 	return $E_OK;
 }
@@ -1879,17 +1855,20 @@ tc(8) from B<iproute2> suite.
 =item Traffic control actions (B<CONFIG_NET_CLS_ACT>=y and
 B<CONFIG_NET_CLS_GACT>=m or y)
 
+=back
+
+
 =head1 COREQUISITES
 
-If you prefer to use B<flow> filtering method, you will need to install
-iptables(8) and ipset(8), B<flow> classifier (kernel version 2.6.25 or above,
-option B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> kernel modules (see
+If you want to use B<flow> filtering method, you should install iptables(8) and
+ipset(8), B<flow> classifier (kernel version 2.6.25 or above, option
+B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> kernel modules (see
 L<http://ipset.netfilter.org/> for details).
 
 
 =head1 COMMANDS
 
-=over 16
+=over 30
 
 =item B<add> <I<ip>> <I<rate>>
 
@@ -1981,28 +1960,6 @@ Output version
 
 =over 8
 
-=item B<-b>, B<--batch>
-
-Batch mode. Sc will read commands and options from STDIN.
-
-=item B<-j>, B<--joint>
-
-Joint mode. Add, change and del commands will be applied to rules and database
-entries simultaneously.
-
-=item B<-d>, B<--debug> I<level>
-
-Set debugging level (from 0 to 2)
-
-=item B<-v>, B<--verbose>
-
-Enable additional output during execution, turn off piping of tc(8) and
-ipset(8) rules, generate and show manpage using C<help> command.
-
-=item B<-S>, B<--syslog>
-
-Send errors and warnings to syslog
-
 =item B<-f>, B<--config> I<file>
 
 Read configuration from specified file instead of F</etc/sc/sc.conf>
@@ -2015,6 +1972,32 @@ Name of output network interface
 
 Name of input network interface
 
+=item B<-d>, B<--debug> I<level>
+
+Set debugging level (from 0 to 2)
+
+=item B<-v>, B<--verbose>
+
+Enable additional output during execution, turn off piping of tc(8) and
+ipset(8) rules, generate and show manpage using C<help> command.
+
+=item B<-q>, B<--quiet>
+
+Suppress output of error messages
+
+=item B<-c>, B<--colored>
+
+Colorize output of some commands
+
+=item B<-j>, B<--joint>
+
+Enable joint mode. Add, change and del commands will be applied to rules and
+database entries simultaneously.
+
+=item B<-b>, B<--batch>
+
+Batch mode. Sc will read commands and options from STDIN.
+
 =item B<-N, --network> "I<net/mask> ..."
 
 Network(s) for classid calculation or for C<ipmap> set (see sc.conf(5) for
@@ -2023,26 +2006,6 @@ details).
 =item B<--filter_network> "I<net/mask> ..."
 
 Network(s) for hashing filter generation (see sc.conf(5) for details).
-
-=item B<-c>, B<--chain> I<name>
-
-Name of iptables(8) chain to use
-
-=item B<--set_name> I<name>
-
-Name of IP set for storage of allowed IPs
-
-=item B<--set_type> I<type>
-
-Type of IP set (ipmap or iphash)
-
-=item B<--set_size> I<size>
-
-Size of IP set (up to 65536)
-
-=item B<-q>, B<--quiet>
-
-Suppress output of error messages
 
 =item B<--quantum> I<size>
 
@@ -2055,6 +2018,22 @@ Default rate unit
 =item B<-l>, B<--leaf_qdisc> I<string>
 
 Leaf qdisc and parameters
+
+=item B<-c>, B<--chain> I<name>
+
+Name of iptables(8) chain to use
+
+=item B<-s>, B<--set_name> I<name>
+
+Name of IP set for storage of allowed IPs
+
+=item B<--set_type> I<type>
+
+Type of IP set (ipmap or iphash)
+
+=item B<--set_size> I<size>
+
+Size of IP set (up to 65536)
 
 =item B<--db_driver> I<name>
 
@@ -2074,7 +2053,11 @@ Database username
 
 =item B<--db_pass> I<password>
 
-Database password
+Database password. Remember that it is insecure to specify password here.
+
+=item B<-S>, B<--syslog>
+
+Send errors and warnings to syslog
 
 =back
 
@@ -2153,7 +2136,7 @@ gigabyte per second
 
 =item Load accounts from database and create all rules
 
-C<sc load>
+C<sc load> or C<sc start>
 
 =item Add class for IP 172.16.0.1 with 256kibit/s.
 
@@ -2167,40 +2150,76 @@ C<sc change 172.16.0.1 512kibit>
 
 C<sc del 172.16.0.1>
 
+=item Reset all rules
+
+C<sc reset>
+
 =back
 
 
 =head1 CONFIGURATION
 
-By default B<sc> reads F</etc/sc/sc.conf> file and uses SQLite database
-F</etc/sc/sc.db>. See sc.conf(5) for details.
+By default B<sc> reads configuration from F</etc/sc/sc.conf> file and uses
+SQLite database at F</etc/sc/sc.db>.
+See sc.conf(5) for details.
+
+=head1 DIAGNOSTICS
+
+The error messages are printed to standard error.
+To print the command lines that return nonzero error codes, use B<-d 1> option.
+To print all command lines without execution, use B<-d 2>.
+To disable usage of batch modes of tc(8) and ipset(8), use B<-v> key.
+
+Program may return one of the following exit codes or the exit code of the
+failed command line that aborted the execution:
+
+=over 4
+
+=item 0 - correct functioning
+
+=item 1 - incorrect parameter
+
+=item 2 - IP-to-classid collision
+
+=item 3 - parameter is undefined
+
+=item 4 - IP already exists
+
+=item 5 - IP does not exist
+
+=item 6 - incorrect command
+
+=item 7 - insufficient privileges
+
+=back
 
 
 =head1 BUGS
 
-Return values are not always processed accurately and no checks are performed
-before execution of any commands due to performance reasons.
+For performance reasons, script does not perform checks for IP addresses,
+classes, filters that require additional executions of external programs
+Return values from tc(8) are not always processed accurately.
 
 
 =head1 RESTRICTIONS
 
-Due to limited number of classids (from 2 to ffff) you can only shape 65534
-different hosts on a single interface.
-You can overcome this limitation with virtual interfaces (IFB or IMQ).
+Due to limited number of classids (from 2 to ffff) you can create only 65534
+classes on a single interface.
+For similar reasons sc(8) only supports networks with masks from /16 to /31.
+u32 classifier allows you to create several hashing filters for /16-/31
+networks, but flow classifier works only with single /16 network.
+IPs from the different /16 networks with the same last two octets will be
+assigned to the same class.
 
-C<Flow> classifier works only with IPs that have different last two
-octets.
-
-For simplicity of filter hash table numbers calculation, the maximum number of
-different entries in C<filter_network> is set to 255.
-
-Script does not perform checks for existence of IP addresses, classes, filters
-due to performance reasons.
+For simplicity of u32 hash table numbers calculation, the maximum number of
+entries in C<filter_network> parameter is 255, and the number of hashing
+filters is limited by 0x799.
 
 
 =head1 SEE ALSO
 
-sc.conf(5), tc(8), tc-htb(8), iptables(8), ipset(8),
+sc.conf(5), tc(8), tc-htb(8), iptables(8), ipset(8), Getopt::Long(3),
+AppConfig(3),
 L<http://lartc.org/howto/lartc.adv-filter.hashing.html>,
 L<http://www.mail-archive.com/netdev@vger.kernel.org/msg60638.html>.
 
@@ -2212,19 +2231,20 @@ Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2008, 2009. Stanislav Kruchinin.
+Copyright (c) 2008-2010. Stanislav Kruchinin.
 
-License: GPL v2 or later.
+License: GNU GPL version 3 or later L<http://www.gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.
 
 
 =head1 README
 
 Administration tool for Linux-based ISP traffic shaper.
 
-
 =pod OSNAMES
 
-linux
+Linux
 
 =pod SCRIPT CATEGORIES
 

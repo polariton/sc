@@ -11,7 +11,7 @@ use AppConfig qw( :expand );
 use Term::ANSIColor;
 
 ##############################################################################
-# Default values of configurable parameters
+# Configurable parameters
 #
 
 my $cfg_file = '/etc/sc/sc.conf';
@@ -343,6 +343,8 @@ else {
 }
 
 exit $RET;
+
+## end of main routine
 
 # autocompletion for commands
 sub acomp_cmd
@@ -732,7 +734,6 @@ sub ip_inttotext
 		$oct[$i] = int($int/$div);
 		$int %= $div;
 	}
-
 	return join '.', @oct;
 }
 
@@ -749,9 +750,7 @@ sub log_carp
 {
 	my $msg = shift;
 	log_syslog('warn', $msg) if $syslog;
-	if (!$quiet) {
-		carp "$PROG: $msg";
-	}
+	carp "$PROG: $msg" if !$quiet;
 	return $!;
 }
 
@@ -1286,15 +1285,15 @@ sub rul_reset_tc
 # colored print with autodetection of non-tty handle
 sub cprint
 {
-	my ($color, $msg) = @_;
+	my ($color, @msg) = @_;
 
 	use POSIX 'isatty';
 
 	if ($colored && isatty(\*STDOUT) ne q{}) {
-		print colored [$color], $msg;
+		print colored [$color], @msg;
 	}
 	else {
-		print $msg;
+		print @msg;
 	}
 	return;
 }
@@ -1814,18 +1813,18 @@ B<sc> works like a wrapper for tc(8), iptables(8) and ipset(8) abstracting you
 from complexity of their rules, so you can think only about IPs and bandwidth
 rates and almost forget about classid's, qdiscs, filters and other stuff.
 
-=head2 Features
+=head2 Main features
 
 =over
 
 =item * Fast loading of large rulesets by using batch modes of tc(8) and
 ipset(8).
 
-=item * Effective per-user classification using u32 hashing filters or flow
+=item * Effective per-user classification with u32 hashing filters or flow
 classifier.
 
-=item * Loading and editing of IPs and rates from any relational database
-supported by Perl B<DBI> module.
+=item * Loading of IPs and rates from any relational database supported by Perl
+B<DBI> module.
 
 =item * Synchronization of rules with database.
 
@@ -1911,15 +1910,18 @@ Delete rules
 
 =item B<help>
 
-Show help for commands, options and list available database drivers
+Show help for commands, options and list available database drivers. Generate
+and show manpage if B<-v> option is specified.
 
 =item B<init>
 
-Initialization of firewall and QoS rules. Use it only for manual rule editing.
+Initialization of firewall and QoS rules. Should be used only for manual rule
+editing.
 
 =item B<list> | B<ls> [I<ip>]
 
-List rules in human-readable form. If no IP specified, all entries are listed.
+List rules in a short and human-readable form. If no IP specified, all entries
+are listed.
 
 =item B<load> | B<start>
 
@@ -1978,8 +1980,8 @@ Set debugging level (from 0 to 2)
 
 =item B<-v>, B<--verbose>
 
-Enable additional output during execution, turn off piping of tc(8) and
-ipset(8) rules, generate and show manpage using C<help> command.
+Enable additional output during execution, turn off usage of tc(8) and
+ipset(8) batch modes, generate and show manpage using C<help> command.
 
 =item B<-q>, B<--quiet>
 
@@ -1991,12 +1993,12 @@ Colorize output of some commands
 
 =item B<-j>, B<--joint>
 
-Enable joint mode. Add, change and del commands will be applied to rules and
-database entries simultaneously.
+Joint mode. Add, change and del commands will be applied to rules and database
+entries simultaneously.
 
 =item B<-b>, B<--batch>
 
-Batch mode. Sc will read commands and options from STDIN.
+Batch mode. Commands and options will be read from STDIN.
 
 =item B<-N, --network> "I<net/mask> ..."
 
@@ -2065,8 +2067,8 @@ Send errors and warnings to syslog
 =head1 RATE UNITS
 
 All rates should be specified as integer numbers, possibly followed by a unit.
-Bare number means that you use the default unit, i.e. kibit.
-You can set another default unit by changing C<rate_unit> parameter in
+Bare number implies default unit (kibit).
+You can use another default unit by changing C<rate_unit> parameter in
 configuration file or by setting the similar command line option.
 
 =over 18

@@ -1,5 +1,5 @@
 PROG=sc
-VERSION=1.0.1
+VERSION=1.1.0
 ARCH=$(PROG)-$(VERSION).tar.bz2
 
 MANDIR?=/usr/local/share/man

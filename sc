@@ -1820,11 +1820,10 @@ rates and almost forget about classid's, qdiscs, filters and other stuff.
 =item * Fast loading of large rulesets by using batch modes of tc(8) and
 ipset(8).
 
-=item * Effective per-user classification with u32 hashing filters or flow
-classifier.
+=item * Effective classification with u32 hashing filters or flow classifier.
 
 =item * Loading of IPs and rates from any relational database supported by Perl
-B<DBI> module.
+DBI module.
 
 =item * Synchronization of rules with database.
 
@@ -2177,21 +2176,37 @@ failed command line that aborted the execution:
 
 =over 4
 
-=item 0 - correct functioning
+=item B<0>
 
-=item 1 - incorrect parameter
+correct functioning
 
-=item 2 - IP-to-classid collision
+=item B<1>
 
-=item 3 - parameter is undefined
+incorrect parameter
 
-=item 4 - IP already exists
+=item B<2>
 
-=item 5 - IP does not exist
+IP-to-classid collision
 
-=item 6 - incorrect command
+=item B<3>
 
-=item 7 - insufficient privileges
+parameter is undefined
+
+=item B<4>
+
+IP already exists
+
+=item B<5>
+
+IP does not exist
+
+=item B<6>
+
+incorrect command
+
+=item B<7>
+
+insufficient privileges
 
 =back
 
@@ -2238,20 +2253,6 @@ Copyright (c) 2008-2010. Stanislav Kruchinin.
 License: GNU GPL version 3 or later L<http://www.gnu.org/licenses/gpl.html>
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY, to the extent permitted by law.
-
-
-=head1 README
-
-Administration tool for Linux-based ISP traffic shaper.
-
-=pod OSNAMES
-
-Linux
-
-=pod SCRIPT CATEGORIES
-
-Networking
-UNIX/System_administration
 
 =cut
 

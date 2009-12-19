@@ -17,7 +17,8 @@ B<sc.conf> - configuration file for sc(8).
 
 The sc.conf is parsed using C<AppConfig> module and has a simple C<variable =
 value> form.
-Expansion for internal and environment variables is enabled (see AppConfig(3) for details).
+Expansion for internal and environment variables is enabled (see AppConfig(3)
+for details).
 The file may contain extra tabs and newlines for formatting.
 Comments begin with the B<#> character and end at the end of line, like
 in shell or Perl scripts.
@@ -26,9 +27,9 @@ in shell or Perl scripts.
 
 =over
 
-=item B<iptables>, B<tc> and B<ipset>
+=item B<tc>, B<iptables> and B<ipset>
 
-Location of iptables(8), tc(8) and ipset(8) executables, respectively.
+Location of tc(8), iptables(8) and ipset(8) executables, respectively.
 
 =item B<out_if>, B<in_if>
 
@@ -69,7 +70,7 @@ no debug (default value),
 
 =item B<1>
 
-print only command line that caused error,
+print command lines with nonzero return values,
 
 =item B<2>
 
@@ -104,32 +105,6 @@ Possible values: boolean.
 
 Perform add, change and delete operation on rules and database by a single
 command.
-
-=item B<set_name>
-
-Name of set with allowed IPs.
-Default value: pass.
-Possible values: ipset-accepted string.
-
-=item B<set_type>
-
-Type of set.
-Default value: ipmap.
-
-Possible values:
-
-=over 8
-
-=item B<ipmap>
-
-for IPs from one /16 network defined by C<network> parameter (very fast and
-memory cheap)
-
-=item B<iphash>
-
-for IPs from arbitrary /16 networks
-
-=back
 
 =item B<network>
 
@@ -167,23 +142,6 @@ Default value: same as B<network> parameter.
 Possible values: a list of network with mask from 16 to 31 that is equivalent
 or includes the networks specified in B<network> parameter.
 
-=item B<set_size>
-
-Size of IP hash for ipset(8).
-
-Default value: 65536.
-
-Possible values: from 1024 to 65536.
-
-=item B<chain>
-
-Name of iptables(8) chain that will contain rules for shaped IPs.
-
-Default value: FORWARD.
-
-For names other than FORWARD the new chain will be created and attached to
-FORWARD chain.
-
 =item B<quantum>
 
 Amount of bytes a stream is allowed to dequeue before the next queue gets a
@@ -209,6 +167,49 @@ of corresponding C<tc qdisc ...> command line.
 Default value: C<pfifo limit 50>.
 
 Possible values: all classless qdiscs supported by tc(8).
+
+=item B<set_name>
+
+Name of set with allowed IPs.
+Default value: pass.
+Possible values: ipset-accepted string.
+
+=item B<set_type>
+
+Type of set.
+Default value: ipmap.
+
+Possible values:
+
+=over 8
+
+=item B<ipmap>
+
+for IPs from one /16 network defined by C<network> parameter (very fast and
+memory cheap)
+
+=item B<iphash>
+
+for IPs from arbitrary /16 networks
+
+=back
+
+=item B<set_size>
+
+Size of IP hash for ipset(8).
+
+Default value: 65536.
+
+Possible values: from 1024 to 65536.
+
+=item B<chain>
+
+Name of iptables(8) chain that will contain rules for shaped IPs.
+
+Default value: FORWARD.
+
+For names other than FORWARD the new chain will be created and attached to
+FORWARD chain.
 
 =item B<db_host>
 

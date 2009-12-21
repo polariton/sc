@@ -1363,7 +1363,7 @@ sub rate_cvt
 	my ($rate, $dst_unit) = @_;
 	my ($num, $unit, $s_key, $d_key);
 
-	if ($rate =~ /^(\d+)([a-zA-Z]+)$/xms) {
+	if ($rate =~ /^(\d+)([a-zA-Z]*)$/xms) {
 		$num = $1;
 		$unit = nonempty($2) ? $2 : $rate_unit;
 		return $rate if $unit eq $dst_unit;

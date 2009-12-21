@@ -1108,7 +1108,8 @@ sub rul_init_u32
 			for my $i (0 .. $div1 - 1) {
 				my $key = sprintf '%x', $i;
 				my $ht2 = sprintf '%x', $filter_nets{$net}{'leafht_i'} + $i;
-				my $net2 = "$oct[0].$oct[1].$i.0/24";
+				my $j = $oct[2] + $i;
+				my $net2 = "$oct[0].$oct[1].$j.0/24";
 
 				$TC->(
 					"filter add dev $dev parent 1:0 pref 10 handle $ht2: ".

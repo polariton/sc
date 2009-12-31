@@ -8,7 +8,8 @@ use DBI;
 use Pod::Usage;
 use Sys::Syslog;
 use AppConfig qw( :expand );
-use Term::ANSIColor;
+use Term::ANSIColor qw( :constants );
+use POSIX qw( isatty );
 
 ##############################################################################
 # Configurable parameters
@@ -27,7 +28,7 @@ my $debug = $DEBUG_OFF;
 
 my $verbose = 0;
 my $quiet = 0;
-my $colored = 'auto';
+my $colored = 1;
 my $batch = 0;
 my $joint = 0;
 
@@ -58,6 +59,7 @@ my $leaf_qdisc = 'pfifo limit 50';
 my $network = '172.16.0.0/16';
 my $filter_network = $network;
 my $filter_method = 'u32';
+
 my (%filter_nets, %class_nets);
 
 my $syslog = 0;
@@ -69,7 +71,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.1.0';
+my $VERSION = '1.1.1';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -201,21 +203,21 @@ my ($rul_init, $rul_add, $rul_del, $rul_change, $rul_load,
 # rate unit transformation coefficients
 my %units = (
 # bit-based
-	'bit' => 1,
-	'kibit|Kibit' => 1024,
-	'kbit|Kbit'   => 1000,
-	'mibit|Mibit' => 1024*1024,
-	'mbit|Mbit'   => 1_000_000,
-	'gibit|Gibit' => 1024*1024*1024,
-	'gbit|Gbit'   => 1_000_000_000,
+	'bit'         => 1,
+	'kibit|Kibit' => 2**10,
+	'kbit|Kbit'   => 1_000,
+	'mibit|Mibit' => 2**20,
+	'mbit|Mbit'   => 10**6,
+	'gibit|Gibit' => 2**30,
+	'gbit|Gbit'   => 10**9,
 # byte-based
 	'bps|Bps'     => 8,
-	'kibps|KiBps' => 8*1024,
-	'kbps|KBps'   => 8000,
-	'mibps|MiBps' => 8*1024*1024,
-	'mbps|MBps'   => 8_000_000,
-	'gibps|GiBps' => 8*1024*1024*1024,
-	'gbps|GBps'   => 8_000_000_000,
+	'kibps|KiBps' => 2**13,
+	'kbps|KBps'   => 8_000,
+	'mibps|MiBps' => 2**23,
+	'mbps|MBps'   => 8*10**6,
+	'gibps|GiBps' => 2**33,
+	'gbps|GBps'   => 8*10**9,
 );
 
 # Error codes
@@ -284,18 +286,23 @@ my %optd = (
 my %db_data;
 my %rul_data;
 
-# handlers and pointers for command execution
+# handlers and pointers for execution of external commands
 my ($TC_H, $IPS_H);
 my $TC = \&sys_tc;
 my $IPS = \&sys_ips;
 my $sys;
+
+# pref values for different types of tc filters
+my $pref_hash = 10; # hashing filters and flow
+my $pref_leaf = 20; # hash table entries
+my $pref_default = 30; # default rule
+
 
 ##############################################################################
 # Main routine
 
 # read configuration file
 if (-T $cfg_file) {
-	# process configuration file
 	my @args = keys %optd;
 	my @cargs = @args;
 
@@ -311,8 +318,8 @@ if (-T $cfg_file) {
 	# prepare list of configuration file parameters and get their values
 	for my $i (0..$#cargs) {
 		$cargs[$i] =~ s/^\w+\|//ixms;
-		$cargs[$i] =~ s/[=!+].*$//ixms;
-		${ $optd{ $args[$i] } } = $cfg->get( $cargs[$i] );
+		$cargs[$i] =~ s/[=!].*$//ixms;
+		${ $optd{$args[$i]} } = $cfg->get( $cargs[$i] );
 	}
 }
 else {
@@ -349,7 +356,7 @@ exit $RET;
 # autocompletion for commands
 sub acomp_cmd
 {
-	my $input = shift;
+	my ($input) = @_;
 	my @match;
 	my @ambig;
 
@@ -368,8 +375,7 @@ sub acomp_cmd
 		return $match[0];
 	}
 	elsif ($#match > 0) {
-		log_warn("command \'$input\' is ambiguous:");
-		print STDERR "    @ambig\n";
+		log_warn("command \'$input\' is ambiguous:\n    @ambig");
 		return q{};
 	}
 	else {
@@ -383,26 +389,28 @@ sub main
 	my @argv = @_;
 	my $ret = $E_OK;
 
+	# process command line
 	if ($batch) {
 		GetOptionsFromArray(\@argv, %optd) or return $E_PARAM;
 	}
-
 	usage($E_CMD) if !defined $argv[0];
 	my $cmd = acomp_cmd($argv[0]);
 	usage($E_CMD) if !defined $cmd;
 	return $E_CMD if $cmd eq q{};
-
-	shift @argv;
 
 	if ($cmdd{$cmd}{'priv'} && !$debug && $>) {
 		log_warn('you must run this command with root privileges');
 		return $E_PRIV;
 	}
 
+	# prepare all settings
 	set_ptrs();
 	set_class_nets();
 	set_filter_nets();
+	local $ENV{ANSI_COLORS_DISABLED} = 1 if !($colored && isatty(\*STDOUT));
 
+	# call handler
+	shift @argv;
 	$ret = $cmdd{$cmd}{'handler'}->(@argv);
 
 	# process return values
@@ -435,20 +443,20 @@ sub main
 # system wrappers for different debug modes
 sub sys_quiet
 {
-	my $c = shift;
+	my ($c) = @_;
 	return system "$c >/dev/null 2>&1";
 }
 
 sub sys_debug_print
 {
-	my $c = shift;
+	my ($c) = @_;
 	return print "$c\n";
 }
 
 sub sys_debug_on
 {
-	my $c = shift;
-	print "$c\n" if system "$c";
+	my ($c) = @_;
+	print "$c\n" if system $c;
 	return $?;
 }
 
@@ -515,14 +523,13 @@ sub set_filter_nets {
 
 	# Initial numbers for hash tables of 1st and 2nd nesting levels
 	#
-	# Real minimal number of u32 hash tables is 1.
-	# 0x100 is taken for simplicity.
+	# Real minimal number of u32 hash tables is 1.  0x100 is taken for
+	# simplicity.
 	my $ht1 = 256;
-	# Difference between initial numbers for hash tables of 1st and 2nd nesting
-	# levels. Increase this value if you want to set more than 255 netmasks to
-	# filter_network parameter.
-	my $ht_21 = 256;
-	my $ht2 = $ht1 + $ht_21;
+	# Difference between initial numbers for hash tables of 1st and 2nd
+	# nesting levels. Increase this value if you want to set more than 255
+	# netmasks to filter_network parameter.
+	my $ht_21 = 256; my $ht2 = $ht1 + $ht_21;
 
 	foreach my $n (split /\ /ixms, $filter_network) {
 		my ($netip, $netmask) = split /\//ixms, $n;
@@ -549,7 +556,7 @@ sub set_filter_nets {
 
 		++$ht1;
 		log_croak("network $n overfulls filter space")
-			if ($ht2 > $ht_max);
+			if $ht2 > $ht_max;
 	}
 	return;
 }
@@ -557,7 +564,7 @@ sub set_filter_nets {
 sub set_class_nets
 {
 	my $cid_min = 2;
-	my $cid_max = 65535;
+	my $cid_max = 65_535;
 	my $cid_i = $cid_min;
 
 	foreach my $n (split /\ /ixms, $network) {
@@ -578,44 +585,45 @@ sub set_class_nets
 		$class_nets{$n}{'classid_i'} = $cid_i;
 		$cid_i += $invmask + 1;
 		log_croak("network $n overfulls classid space")
-			if ($cid_i - $cid_min - 1 > $cid_max);
+			if $cid_i - $cid_min - 1 > $cid_max;
 	}
+
 	return;
 }
 
 sub nonempty
 {
-	my $str = shift;
+	my ($str) = @_;
 	return (defined $str && $str ne q{});
 }
 
 sub is_ip
 {
-	my $ip = shift;
-	chomp $ip;
+	my ($ip) = @_;
 
+	chomp $ip;
 	if ($ip =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/ixms) {
 		if ($1 >  0 && $1 <  255 && $2 >= 0 && $2 <= 255 &&
 			$3 >= 0 && $3 <= 255 && $4 >= 0 && $4 <= 255) {
 			return $ip;
 		}
 	}
+
 	return 0;
 }
 
 sub is_rate
 {
-	my $rate = shift;
+	my ($rate) = @_;
 	chomp $rate;
 	my $result = 0;
-
 	my ($num, $unit);
 
-	if (($num, $unit) = $rate =~ /^(\d+)([A-Za-z]*)$/xms) {
+	if (($num, $unit) = $rate =~ /^([0-9]+)([A-z]*)$/xms) {
 		return 0 if $num == 0;
 		if (nonempty($unit)) {
 			foreach my $u (keys %units) {
-				if ($unit =~ /^($u)$/xms) {
+				if ($unit =~ /^(?:$u)$/xms) {
 					$result = $rate;
 					last;
 				}
@@ -640,13 +648,14 @@ sub arg_check
 	log_croak("$argname is undefined") if !defined $arg;
 	$result = $issub->($arg);
 	log_croak("$arg is invalid $argname") if !$result;
+
 	return $result;
 }
 
 # calculate tc classid from text form of IP
 sub ip_classid
 {
-	my $ip = shift;
+	my ($ip) = @_;
 	my $intip = ip_texttoint($ip);
 	my $cid;
 
@@ -671,7 +680,7 @@ sub ip_classid
 # output: leaf hash key and bucket number
 sub ip_leafht_key
 {
-	my $ip = shift;
+	my ($ip) = @_;
 	my $intip = ip_texttoint($ip);
 	my ($leafht, $key);
 
@@ -701,7 +710,7 @@ sub div_hmask_u32
 {
 	my ($netmask, $n) = @_;
 
-	log_croak("$n is invalid number of octet") if ($n < 1 || $n > 4);
+	log_croak("$n is invalid number of octet") if $n < 1 || $n > 4;
 	# get n-th byte from netmask
 	my $inthmask = (2**(32 - $netmask) - 1) & (0xff << 8*(4-$n));
 	my $hmask = sprintf '0x%08x', $inthmask;
@@ -713,19 +722,21 @@ sub div_hmask_u32
 # convert IP from text to int form
 sub ip_texttoint
 {
-	my $ip = shift;
+	my ($ip) = @_;
 	my @oct = split /\./ixms, $ip;
 	my $int = 0;
+
 	for my $i (0..3) {
-		$int += $oct[$i]*( 1 << 8*(3-$i) );
+		$int += $oct[$i] * (1 << 8*(3-$i));
 	}
+
 	return $int;
 }
 
 # convert IP from int to text form
 sub ip_inttotext
 {
-	my $int = shift;
+	my ($int) = @_;
 	my @oct;
 
 	for my $i (0..3) {
@@ -733,21 +744,25 @@ sub ip_inttotext
 		$oct[$i] = int $int/$div;
 		$int %= $div;
 	}
+
 	return join '.', @oct;
 }
 
 sub log_syslog
 {
 	my ($severity, $msg) = @_;
+
 	openlog($PROG, $syslog_options, $syslog_facility);
 	syslog($severity, $msg);
 	closelog();
+
 	return $!;
 }
 
 sub log_carp
 {
-	my $msg = shift;
+	my ($msg) = @_;
+
 	log_syslog('warn', $msg) if $syslog;
 	carp "$PROG: $msg" if !$quiet;
 	return $!;
@@ -755,7 +770,8 @@ sub log_carp
 
 sub log_croak
 {
-	my $msg = shift;
+	my ($msg) = @_;
+
 	log_syslog('err', $msg) if $syslog;
 	if ($quiet) {
 		exit $!;
@@ -767,9 +783,10 @@ sub log_croak
 
 sub log_warn
 {
-	my $msg = shift;
-	log_syslog('warning', $msg) if $syslog;
-	print STDERR "$PROG: $msg\n" if !$quiet;
+	my ($msg) = @_;
+
+	log_syslog('warn', $msg) if $syslog;
+	print {*STDERR} "$PROG: $msg\n" if !$quiet;
 	return $!;
 }
 
@@ -798,8 +815,8 @@ sub db_load
 	my $dbh = db_connect();
 	my $sth = $dbh->prepare($query_load);
 	$sth->execute();
-
 	my ($intip, $rate, $ip, $cid);
+
 	while (my $ref = $sth->fetchrow_arrayref()) {
 		($intip, $rate) = @{$ref};
 		if (!defined $rate) {
@@ -811,9 +828,8 @@ sub db_load
 		$db_data{$cid}{'rate'} = $rate;
 		$db_data{$cid}{'ip'} = $ip;
 	}
-
 	$sth->finish();
-	$sth = undef; # hack for SQLite
+	undef $sth;
 	$dbh->disconnect();
 
 	return $dbh;
@@ -856,23 +872,22 @@ sub rul_add_u32
 		"htb rate $rate ceil $ceil quantum $quantum"
 	);
 	$TC->(
-		"class replace dev $i_if parent 1: classid 1:$cid ".
-		"htb rate $rate ceil $ceil quantum $quantum"
+		"qdisc replace dev $o_if parent 1:$cid handle $cid:0 $leaf_qdisc"
+	);
+	$TC->(
+		"filter replace dev $o_if parent 1: pref $pref_leaf ".
+		"u32 ht $ht:$key: match ip src $ip flowid 1:$cid"
 	);
 
 	$TC->(
-		"qdisc replace dev $o_if parent 1:$cid handle $cid:0 $leaf_qdisc"
+		"class replace dev $i_if parent 1: classid 1:$cid ".
+		"htb rate $rate ceil $ceil quantum $quantum"
 	);
 	$TC->(
 		"qdisc replace dev $i_if parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
-
 	$TC->(
-		"filter replace dev $o_if parent 1: pref 20 ".
-		"u32 ht $ht:$key: match ip src $ip flowid 1:$cid"
-	);
-	$TC->(
-		"filter replace dev $i_if parent 1: pref 20 ".
+		"filter replace dev $i_if parent 1: pref $pref_leaf ".
 		"u32 ht $ht:$key: match ip dst $ip flowid 1:$cid"
 	);
 
@@ -899,11 +914,17 @@ sub rul_del_u32
 	my ($ip, $cid) = @_;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	$TC->("filter del dev $o_if parent 1: pref 10 handle $ht:$key:800 u32");
+	$TC->(
+		"filter del dev $o_if parent 1: pref $pref_hash ".
+		"handle $ht:$key:800 u32"
+	);
 	$TC->("qdisc del dev $o_if parent 1:$cid handle $cid:0");
 	$TC->("class del dev $o_if parent 1: classid 1:$cid");
 
-	$TC->("filter del dev $i_if parent 1: pref 10 handle $ht:$key:800 u32");
+	$TC->(
+		"filter del dev $i_if parent 1: pref $pref_hash ".
+		"handle $ht:$key:800 u32"
+	);
 	$TC->("qdisc del dev $i_if parent 1:$cid handle $cid:0");
 	$TC->("class del dev $i_if parent 1: classid 1:$cid");
 
@@ -950,10 +971,10 @@ sub rul_load_flow
 		$rul_data{$cid}{'ip'} = $ip;
 	}
 
-	open my $TCH, '-|', "$tc class show dev $i_if"
+	open my $TCCH, '-|', "$tc class show dev $i_if"
 		or log_croak("unable to open pipe for $tc");
-	my @tcout = <$TCH>;
-	close $TCH or log_carp("unable to close pipe for $tc");
+	my @tcout = <$TCCH>;
+	close $TCCH or log_carp("unable to close pipe for $tc");
 	foreach (@tcout) {
 		if (($cid, $rate) = /leaf\ ([0-9a-f]+):\ .*\ rate\ (\w+)/xms) {
 			next if !defined $rul_data{$cid};
@@ -976,8 +997,8 @@ sub rul_load_u32
 	close $TCFH or log_carp("unable to close pipe for $tc");
 	for my $i (0 .. $#tcout) {
 		chomp $tcout[$i];
-		if (($ip) = $tcout[$i] =~
-				/match\ IP\ .*\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
+		if (($ip) = $tcout[$i]
+			=~ /match\ IP\ .*\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
 			if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 				$rul_data{$cid}{'ip'} = $ip;
 			}
@@ -1003,14 +1024,14 @@ sub rul_init_flow
 {
 	$TC->("qdisc add dev $o_if root handle 1: htb");
 	$TC->(
-		"filter add dev $o_if parent 1:0 protocol ip pref 10 handle 1 ".
-		"flow map key src and 0xffff"
+		"filter add dev $o_if parent 1:0 protocol ip pref $pref_hash ".
+		"handle 1 flow map key src and 0xffff"
 	);
 
 	$TC->("qdisc add dev $i_if root handle 1: htb");
 	$TC->(
-		"filter add dev $i_if parent 1:0 protocol ip pref 10 handle 1 ".
-		"flow map key dst and 0xffff"
+		"filter add dev $i_if parent 1:0 protocol ip pref $pref_hash ".
+		"handle 1 flow map key dst and 0xffff"
 	);
 
 	if ($set_type eq 'ipmap') {
@@ -1048,8 +1069,8 @@ sub rul_init_u32
 	my ($dev, $match, $offset) = @_;
 
 	$TC->("qdisc add dev $dev root handle 1: htb");
-	$TC->("filter add dev $dev parent 1:0 protocol ip pref 10 u32");
-	foreach my $net (sort { $filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'} }
+	$TC->("filter add dev $dev parent 1:0 protocol ip pref $pref_hash u32");
+	foreach my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
 	  keys %filter_nets) {
 		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
 		my $netmask = $filter_nets{$net}{'mask'};
@@ -1057,11 +1078,11 @@ sub rul_init_u32
 		if ($netmask >= 24 && $netmask < 31) {
 			my ($div1, $hmask1) = div_hmask_u32($netmask, 4);
 			$TC->(
-				"filter add dev $dev parent 1:0 protocol ip pref 10 ".
+				"filter add dev $dev parent 1:0 protocol ip pref $pref_hash ".
 				"handle $ht1: u32 divisor $div1"
 			);
 			$TC->(
-				"filter add dev $dev parent 1:0 protocol ip pref 10 ".
+				"filter add dev $dev parent 1:0 protocol ip pref $pref_hash ".
 				"u32 ht 800:: match ip $match $net ".
 				"hashkey mask $hmask1 at $offset link $ht1:"
 			);
@@ -1072,11 +1093,11 @@ sub rul_init_u32
 
 			# parent filter
 			$TC->(
-				"filter add dev $dev parent 1:0 protocol ip pref 10 ".
+				"filter add dev $dev parent 1:0 protocol ip pref $pref_hash ".
 				"handle $ht1: u32 divisor $div1"
 			);
 			$TC->(
-				"filter add dev $dev parent 1:0 protocol ip pref 10 ".
+				"filter add dev $dev parent 1:0 protocol ip pref $pref_hash ".
 				"u32 ht 800:: match ip $match $net ".
 				"hashkey mask $hmask1 at $offset link $ht1:"
 			);
@@ -1090,12 +1111,13 @@ sub rul_init_u32
 				my $net2 = "$oct[0].$oct[1].$j.0/24";
 
 				$TC->(
-					"filter add dev $dev parent 1:0 protocol ip pref 10 ".
-					"handle $ht2: u32 divisor $div2"
+					"filter add dev $dev parent 1:0 protocol ip ".
+					"pref $pref_hash handle $ht2: u32 divisor $div2"
 				);
 				$TC->(
-					"filter add dev $dev parent 1:0 protocol ip pref 10 ".
-					"u32 ht $ht1:$key: match ip $match $net2 ".
+					"filter add dev $dev parent 1:0 protocol ip ".
+					"pref $pref_hash u32 ht $ht1:$key: ".
+					"match ip $match $net2 ".
 					"hashkey mask $hmask2 at $offset link $ht2:"
 				);
 			}
@@ -1107,9 +1129,10 @@ sub rul_init_u32
 
 	# block all other traffic
 	$TC->(
-		"filter add dev $dev parent 1:0 protocol ip pref 30 ".
-		"u32 match u32 0x0 0x0 at 0 police mtu 1 action drop"
+		"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
+		'u32 match u32 0x0 0x0 at 0 police mtu 1 action drop'
 	);
+
 	return $?;
 }
 
@@ -1121,16 +1144,6 @@ sub rul_show_flow
 		foreach my $ip (@ips) {
 			my $cid = ip_classid($ip);
 			print_rules(
-				"TC rules for $ip\n\nInput qdisc [$i_if, $cid]:",
-				"$tc -i -s -d qdisc show dev $i_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
-			);
-			print_rules(
-				"\nOutput qdisc [$o_if, $cid]:",
-				"$tc -i -s -d qdisc show dev $o_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
-			);
-			print_rules(
 				"\nInput class [$i_if, $cid]:",
 				"$tc -i -s -d class show dev $i_if | ".
 				"fgrep -w -A 3 \"leaf $cid\:\""
@@ -1140,21 +1153,31 @@ sub rul_show_flow
 				"$tc -i -s -d class show dev $o_if | ".
 				"fgrep -w -A 3 \"leaf $cid\:\""
 			);
+			print_rules(
+				"TC rules for $ip\n\nInput qdisc [$i_if, $cid]:",
+				"$tc -i -s -d qdisc show dev $i_if | ".
+				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+			);
+			print_rules(
+				"\nOutput qdisc [$o_if, $cid]:",
+				"$tc -i -s -d qdisc show dev $o_if | ".
+				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+			);
 			print_rules("\nIPSet entry for $ip:", "$ipset -T $set_name $ip");
 			print "\n";
 		}
 	}
 	else {
-		cprint('bold', "QDISCS:\n");
-		system "$tc -i -s -d qdisc show dev $i_if";
-		system "$tc -i -s -d qdisc show dev $o_if";
-		cprint('bold', "\nCLASSES:\n");
-		system "$tc -i -s -d class show dev $i_if";
-		system "$tc -i -s -d class show dev $o_if";
-		cprint('bold', "\nFILTERS:\n");
+		print BOLD, "FILTERS:\n", RESET;
 		system "$tc -p -s filter show dev $i_if";
 		system "$tc -p -s filter show dev $o_if";
-		cprint('bold', "\nIPTABLES RULES:\n");
+		print BOLD, "\nCLASSES:\n", RESET;
+		system "$tc -i -s -d class show dev $i_if";
+		system "$tc -i -s -d class show dev $o_if";
+		print BOLD, "\nQDISCS:\n", RESET;
+		system "$tc -i -s -d qdisc show dev $i_if";
+		system "$tc -i -s -d qdisc show dev $o_if";
+		print BOLD, "\nIPTABLES RULES:\n", RESET;
 		system "$iptables -nL";
 	}
 	return $?;
@@ -1168,18 +1191,17 @@ sub rul_show_u32
 		foreach my $ip (@ips) {
 			my $cid = ip_classid($ip);
 
-			# tc qdisc
+			# tc filter
 			print_rules(
-				"Input qdisc [$i_if, $cid]:",
-				"$tc -i -s -d qdisc show dev $i_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+				"Input filter [$i_if, $cid]:",
+				"$tc -p -s filter show dev $i_if | ".
+				"fgrep -w -B 1 \"match IP dst $ip/32\""
 			);
 			print_rules(
-				"\nOutput qdisc [$o_if, $cid]:",
-				"$tc -i -s -d qdisc show dev $o_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+				"\nOutput filter [$o_if, $cid]:",
+				"$tc -p -s filter show dev $o_if | ".
+				"fgrep -w -B 1 \"match IP src $ip/32\""
 			);
-
 			# tc class
 			print_rules(
 				"\nInput class [$i_if, $cid]:",
@@ -1191,30 +1213,30 @@ sub rul_show_u32
 				"$tc -i -s -d class show dev $o_if | ".
 				"fgrep -w -A 3 \"leaf $cid\:\""
 			);
-			# tc filter
+			# tc qdisc
 			print_rules(
-				"\nInput filter [$i_if, $cid]:",
-				"$tc -p -s filter show dev $i_if | ".
-				"fgrep -w -B 1 \"match IP dst $ip/32\""
+				"\nInput qdisc [$i_if, $cid]:",
+				"$tc -i -s -d qdisc show dev $i_if | ".
+				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 			);
 			print_rules(
-				"\nOutput filter [$o_if, $cid]:",
-				"$tc -p -s filter show dev $o_if | ".
-				"fgrep -w -B 1 \"match IP src $ip/32\""
+				"\nOutput qdisc [$o_if, $cid]:",
+				"$tc -i -s -d qdisc show dev $o_if | ".
+				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 			);
 			print "\n";
 		}
 	}
 	else {
-		cprint('bold', "QDISCS:\n");
-		system "$tc -i -s -d qdisc show dev $i_if";
-		system "$tc -i -s -d qdisc show dev $o_if";
-		cprint('bold', "\nCLASSES:\n");
-		system "$tc -i -s -d class show dev $i_if";
-		system "$tc -i -s -d class show dev $o_if";
-		cprint('bold', "\nFILTERS:\n");
+		print BOLD, "FILTERS:\n", RESET;
 		system "$tc -p -s filter show dev $i_if";
 		system "$tc -p -s filter show dev $o_if";
+		print BOLD, "\nCLASSES:\n", RESET;
+		system "$tc -i -s -d class show dev $i_if";
+		system "$tc -i -s -d class show dev $o_if";
+		print BOLD, "\nQDISCS:\n", RESET;
+		system "$tc -i -s -d qdisc show dev $i_if";
+		system "$tc -i -s -d qdisc show dev $o_if";
 		return $?;
 	}
 	return $?;
@@ -1249,21 +1271,6 @@ sub rul_reset_tc
 	return $?;
 }
 
-# colored print with autodetection of non-tty handle
-sub cprint
-{
-	my ($color, @msg) = @_;
-	use POSIX 'isatty';
-
-	if ($colored && isatty(\*STDOUT)) {
-		print colored [$color], @msg;
-	}
-	else {
-		print @msg;
-	}
-	return;
-}
-
 sub print_rules
 {
 	my ($comment, @cmds) = @_;
@@ -1276,7 +1283,7 @@ sub print_rules
 		close $PIPE or log_croak("unable to close pipe for $c");
 	}
 	if (@out) {
-		cprint('bold', "$comment\n") if nonempty($comment);
+		print BOLD, "$comment\n", RESET if nonempty($comment);
 		print @out;
 	}
 	return $?;
@@ -1307,10 +1314,10 @@ sub print_cmds
 
 	foreach my $key (@cmds) {
 		next unless nonempty($cmdd{$key}{'desc'});
-		print ' ' x $colspace[0], $lengths{$key}{'cmd'},
-		      ' ' x ($maxcmdlen - $lengths{$key}{'cmdl'} + $colspace[1]);
+		print q{ } x $colspace[0], $lengths{$key}{'cmd'},
+		      q{ } x ($maxcmdlen - $lengths{$key}{'cmdl'} + $colspace[1]);
 		print $cmdd{$key}{'arg'} if defined $cmdd{$key}{'arg'};
-		print ' ' x ($maxarglen - $lengths{$key}{'argl'} + $colspace[2]),
+		print q{ } x ($maxarglen - $lengths{$key}{'argl'} + $colspace[2]),
 		      $cmdd{$key}{'desc'}, "\n";
 	}
 	return;
@@ -1318,7 +1325,7 @@ sub print_cmds
 
 sub round
 {
-	my $n = shift;
+	my ($n) = @_;
 	return int($n + .5*($n <=> 0));
 }
 
@@ -1327,7 +1334,7 @@ sub rate_cvt
 	my ($rate, $dst_unit) = @_;
 	my ($num, $unit, $s_key, $d_key);
 
-	if (($num) = $rate =~ /^(\d+)([a-zA-Z]*)$/xms) {
+	if (($num) = $rate =~ /^([0-9]+)([A-z]*)$/xms) {
 		$unit = nonempty($2) ? $2 : $rate_unit;
 		return $rate if $unit eq $dst_unit;
 		foreach my $u (keys %units) {
@@ -1355,8 +1362,7 @@ sub rate_cvt
 
 sub usage
 {
-	my $ret = shift;
-
+	my ($ret) = @_;
 	print $usage_preamble;
 	print_cmds();
 	print "\n";
@@ -1365,14 +1371,14 @@ sub usage
 
 sub sys_tc
 {
-	my $c = shift;
+	my ($c) = @_;
 	return $sys->("$tc $c");
 }
 
 sub batch_tc
 {
-	my $c = shift;
-	return print $TC_H "$c\n";
+	my ($c) = @_;
+	return print {$TC_H} "$c\n";
 }
 
 sub batch_start_tc
@@ -1397,14 +1403,14 @@ sub batch_stop_tc
 
 sub sys_ips
 {
-	my $c = shift;
+	my ($c) = @_;
 	return $sys->("$ipset $c");
 }
 
 sub batch_ips
 {
-	my $c = shift;
-	return print $IPS_H "$c\n";
+	my ($c) = @_;
+	return print {$IPS_H} "$c\n";
 }
 
 sub batch_start_ips
@@ -1579,7 +1585,7 @@ sub cmd_status
 	close $PIPE or log_croak("unable to close pipe for $tc");
 
 	if ($out[0] !~ /^qdisc\ htb/xms) {
-		print STDERR "$PROG: no shaping rules found\n";
+		log_warn('no shaping rules found');
 		return $E_UNDEF;
 	}
 
@@ -1589,11 +1595,11 @@ sub cmd_status
 	foreach my $s (@out) {
 		chomp $s;
 		if ($s =~ /qdisc\ $lqdisk\ ([0-9a-f]+):/xms) {
-			print STDERR "$PROG: shaping rules were successfully created\n";
-			return 0;
+			log_warn('shaping rules were successfully created');
+			return $E_OK;
 		}
 	}
-	print STDERR "$PROG: htb qdisc found but there is no child queues\n";
+	log_warn('htb qdisc found but there is no child queues');
 	return $E_NOTEXIST;
 }
 
@@ -1612,8 +1618,8 @@ sub cmd_help
 		print "$VERSTR\n\n";
 		pod2usage({ -exitstatus => 'NOEXIT', -verbose => 99,
 			-sections => 'SYNOPSIS|COMMANDS|OPTIONS', -output => \*STDOUT });
-		print "Available database drivers:\n";
-		print ' ' x 4, join(', ', DBI->available_drivers), "\n";
+		print "Available database drivers:\n    ",
+			join(', ', DBI->available_drivers), "\n";
 	}
 	return $E_OK;
 }
@@ -1644,7 +1650,7 @@ sub cmd_dbadd
 	my $sth = $dbh->prepare($query_add);
 	$sth->execute($intip, $intrate);
 	$sth->finish();
-	$sth = undef;
+	undef $sth;
 	$dbh->disconnect();
 	return $E_OK;
 }
@@ -1663,7 +1669,7 @@ sub cmd_dbdel
 		$sth->execute($intip);
 		$sth->finish();
 	}
-	$sth = undef;
+	undef $sth;
 	$dbh->disconnect();
 	return $E_OK;
 }
@@ -1679,14 +1685,14 @@ sub cmd_dbchange
 	my $sth = $dbh->prepare($query_change);
 	$sth->execute($intip, $intrate);
 	$sth->finish();
-	$sth = undef;
+	undef $sth;
 	$dbh->disconnect();
 	return $E_OK;
 }
 
 sub cmd_dblist
 {
-	my $ip = shift;
+	my ($ip) = @_;
 	my $ret = $E_OK;
 
 	if (!defined $ip) {
@@ -1700,7 +1706,6 @@ sub cmd_dblist
 		arg_check(\&is_ip, $ip, 'IP');
 		my $intip = ip_texttoint($ip);
 		my $rate;
-
 		my $dbh = db_connect();
 		my $sth = $dbh->prepare($query_list);
 		$sth->execute($intip);
@@ -1709,7 +1714,7 @@ sub cmd_dblist
 			printf "%-15s  %10s\n", $ip, $rate . $rate_unit;
 		}
 		$sth->finish();
-		$sth = undef;
+		undef $sth;
 		$dbh->disconnect();
 	}
 	return $E_OK;
@@ -1718,11 +1723,10 @@ sub cmd_dblist
 sub cmd_ratecvt
 {
 	my ($rate, $unit) = @_;
-	my $result;
 
 	log_croak('rate is undefined') if !defined $rate;
 	log_croak('destination unit is undefined') if !defined $unit;
-
+	my $result;
 	$result = rate_cvt($rate, $unit);
 	print "$result\n";
 	return $E_OK;
@@ -1732,14 +1736,12 @@ sub cmd_calc
 {
 	use Data::Dumper;
 
-	my $ip = shift;
+	my ($ip) = @_;
 	if (!defined $ip) {
 		print Dumper(\%filter_nets);
 		print Dumper(\%class_nets);
 		return $E_OK;
 	}
-	my $n;
-
 	arg_check(\&is_ip, $ip, 'IP');
 	my $cid = ip_classid($ip);
 	my ($ht, $key) = ip_leafht_key($ip);
@@ -1756,7 +1758,7 @@ B<sc> - administration tool for ISP traffic shaper
 
 =head1 SYNOPSIS
 
-B<sc> [I<options>] B<command> [I<ip>] [I<rate>]
+B<sc> [options] B<command> [ip] [rate]
 
 =head1 DESCRIPTION
 
@@ -1776,8 +1778,8 @@ ipset(8).
 
 =item * Effective classification with u32 hashing filters or flow classifier.
 
-=item * Loading of IPs and rates from any relational database supported by Perl
-DBI module.
+=item * Loading of IPs and rates from any relational database supported by
+Perl DBI module.
 
 =item * Synchronization of rules with database.
 
@@ -1812,8 +1814,8 @@ B<CONFIG_NET_CLS_GACT>=m or y)
 
 =head1 COREQUISITES
 
-If you want to use B<flow> filtering method, you should install iptables(8) and
-ipset(8), B<flow> classifier (kernel version 2.6.25 or above, option
+If you want to use B<flow> filtering method, you should install iptables(8)
+and ipset(8), B<flow> classifier (kernel version 2.6.25 or above, option
 B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> kernel modules (see
 L<http://ipset.netfilter.org/> for details).
 
@@ -1822,26 +1824,26 @@ L<http://ipset.netfilter.org/> for details).
 
 =over 30
 
-=item B<add> <I<ip>> <I<rate>>
+=item B<add> <ip> <rate>
 
 Add rules for specified IP
 
-=item B<calc> [I<ip>]
+=item B<calc> [ip]
 
 Calculate and print internally used variables: classids, hash table numbers
 and keys.
 
-=item B<change> | B<mod> <I<ip>> <I<rate>>
+=item B<change> | B<mod> <ip> <rate>
 
 Change rate for specified IP
 
-=item B<dbadd> <I<ip>> <I<rate>>
+=item B<dbadd> <ip> <rate>
 
 Add database entry
 
 =cut
 
-=item B<dbchange> | B<dbmod> <I<ip>> <I<rate>>
+=item B<dbchange> | B<dbmod> <ip> <rate>
 
 Change database entry
 
@@ -1849,15 +1851,15 @@ Change database entry
 
 Create database and table
 
-=item B<dbdel> | B<dbrm> <I<ip>>
+=item B<dbdel> | B<dbrm> <ip>
 
 Delete database entry
 
-=item B<dblist> | B<dbls> [I<ip>]
+=item B<dblist> | B<dbls> [ip]
 
 List database entries. If no IP specified, all entries are listed.
 
-=item B<del> | B<rm> <I<ip>>
+=item B<del> | B<rm> <ip>
 
 Delete rules
 
@@ -1871,7 +1873,7 @@ and show manpage if B<-v> option is specified.
 Initialization of firewall and QoS rules. Should be used only for manual rule
 editing.
 
-=item B<list> | B<ls> [I<ip>]
+=item B<list> | B<ls> [ip]
 
 List rules in a short and human-readable form. If no IP specified, all entries
 are listed.
@@ -1880,7 +1882,7 @@ are listed.
 
 Load IPs and rates from database and create ruleset
 
-=item B<ratecvt> <I<rate>> <I<unit>>
+=item B<ratecvt> <rate> <unit>
 
 Convert rate from one unit to another
 
@@ -1892,7 +1894,7 @@ Reset rules and load database
 
 Delete all shaping rules
 
-=item B<show> [I<ip>]
+=item B<show> [ip]
 
 Show rules explicitly. If no IP specified, all entries are listed.
 
@@ -1915,19 +1917,19 @@ Output version
 
 =over 8
 
-=item B<-f>, B<--config> I<file>
+=item B<-f>, B<--config> file
 
-Read configuration from specified file instead of F</etc/sc/sc.conf>
+Read configuration from specified file
 
-=item B<-o>, B<--out_if> I<if_name>
+=item B<-o>, B<--out_if> if_name
 
 Name of output network interface
 
-=item B<-i>, B<--in_if> I<if_name>
+=item B<-i>, B<--in_if> if_name
 
 Name of input network interface
 
-=item B<-d>, B<--debug> I<level>
+=item B<-d>, B<--debug> level
 
 Set debugging level (from 0 to 2)
 
@@ -1953,60 +1955,60 @@ entries simultaneously.
 
 Batch mode. Commands and options will be read from STDIN.
 
-=item B<-N, --network> "I<net/mask> ..."
+=item B<-N, --network> "net/mask ..."
 
 Network(s) for classid calculation or for C<ipmap> set (see sc.conf(5) for
 details).
 
-=item B<--filter_network> "I<net/mask> ..."
+=item B<--filter_network> "net/mask ..."
 
 Network(s) for hashing filter generation (see sc.conf(5) for details).
 
-=item B<--quantum> I<size>
+=item B<--quantum> size
 
 Size of quantum for child queues
 
-=item B<-u>, B<--rate_unit> I<unit>
+=item B<-u>, B<--rate_unit> unit
 
 Default rate unit
 
-=item B<-l>, B<--leaf_qdisc> I<string>
+=item B<-l>, B<--leaf_qdisc> string
 
 Leaf qdisc and parameters
 
-=item B<-c>, B<--chain> I<name>
+=item B<-c>, B<--chain> name
 
 Name of iptables(8) chain to use
 
-=item B<-s>, B<--set_name> I<name>
+=item B<-s>, B<--set_name> name
 
 Name of IP set for storage of allowed IPs
 
-=item B<--set_type> I<type>
+=item B<--set_type> type
 
 Type of IP set (ipmap or iphash)
 
-=item B<--set_size> I<size>
+=item B<--set_size> size
 
 Size of IP set (up to 65536)
 
-=item B<--db_driver> I<name>
+=item B<--db_driver> name
 
 Database driver
 
-=item B<--db_host> I<host:port>
+=item B<--db_host> host:port
 
 Database server address or hostname
 
-=item B<--db_name> I<name>
+=item B<--db_name> name
 
 Database name to use
 
-=item B<--db_user> I<name>
+=item B<--db_user> name
 
 Database username
 
-=item B<--db_pass> I<password>
+=item B<--db_pass> password
 
 Database password. Remember that it is insecure to specify password here.
 
@@ -2021,8 +2023,8 @@ Send errors and warnings to syslog
 
 All rates should be specified as integer numbers, possibly followed by a unit.
 Bare number implies default unit (kibit).
-You can use another default unit by changing C<rate_unit> parameter in
-configuration file or by setting the similar command line option.
+You may use another unit by changing C<rate_unit> parameter in configuration
+file or by setting the similar command line option.
 
 =over 18
 
@@ -2121,7 +2123,8 @@ See sc.conf(5) for details.
 =head1 DIAGNOSTICS
 
 The error messages are printed to standard error.
-To print the command lines that return nonzero error codes, use B<-d 1> option.
+To print the command lines that return nonzero error codes, use B<-d 1>
+option.
 To print all command lines without execution, use B<-d 2>.
 To disable usage of batch modes of tc(8) and ipset(8), use B<-v> key.
 
@@ -2167,9 +2170,8 @@ insufficient privileges
 
 =head1 BUGS
 
-For performance reasons, script does not perform checks for IP addresses,
-classes, filters that require additional executions of external programs
-Return values from tc(8) are not always processed accurately.
+For performance reasons, script does not perform checks that require
+additional executions of external programs.
 
 
 =head1 RESTRICTIONS

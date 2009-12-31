@@ -26,16 +26,18 @@ classifier (CONFIG_NET_CLS_FLOW).
 AppConfig, DBI, DBD-module for your database (DBD::Pg, DBD::SQLite,
 DBD::mysql, etc), Getopt::Long, Pod::Usage, Term::ANSIColor, Sys::Syslog.
 
-  a. Installation from package repository of your Linux distribution
-     (recommended way).
+  a. Installation from package repository of your Linux distribution.
 
      Example for Debian:
      # aptitude install perl perl-base perl-doc perl-modules libdbi-perl \
-	     libdbd-sqlite3-perl libappconfig-perl
+	     libdbd-sqlite3-perl libappconfig-perl libpod-parser-perl
 
   b. Installation of modules from CPAN.
-     # cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage Term::ANSIColor \
-	   Sys::Syslog
+     # cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage \
+	     Term::ANSIColor Sys::Syslog
+
+If you see that output of "sc help" command is broken, install Pod::Usage
+module from CPAN.
 
 2. Install iproute2 suite.
 
@@ -60,13 +62,14 @@ Configuration
 
 1. Database settings
 
-By default, sc stores it's data in SQLite database at /etc/sc/sc.db, but it can
-use any other DBI-compatible database like MySQL, PostgreSQL or Oracle. If you
-plan to load data from a remote database on a dedicated billing server, you
-must install corresponding Perl DBD module, configure database driver and
-SQL-queries that will produce correct output for sc.  First column must contain
-an IP-addresses in integer representation, and second column provides the
-integer bandwith rate values (see default value of "query_create" parameter).
+By default, sc stores it's data in SQLite database at /etc/sc/sc.db, but it
+can use any other DBI-compatible database server like MySQL, PostgreSQL or
+Oracle. If you plan to load the data from a remote database on a dedicated
+billing server, you must install corresponding Perl DBD module, configure
+database driver and SQL-queries that will produce correct output for sc.
+First column must contain an IP-addresses in integer representation, and
+second column provides the integer bandwith rate values (see default value of
+"query_create" parameter).
 
 Rate units are defined by the "rate_unit" parameter in sc.conf or by similar
 command line option. Default rate unit is 1 Kibit/s = 1024 bit/s.
@@ -78,8 +81,8 @@ and add some data.
 # sc dbadd 172.16.0.1 10Mibit
 # sc dbadd 172.16.0.2 20Mibit
 
-You also may use "genbase" script to generate some database entries with random
-values of bandwidth rates.
+You also may use "genbase" script to generate some database entries with
+random values of bandwidth rates.
 
 
 2. Synchronization of rules with database
@@ -95,9 +98,8 @@ synchronization of rules will be performed every 10 minutes.
 SC can log errors and warnings through syslog. To enable this feature set the
 "syslog" option to 1 in /etc/sc/sc.conf.
 
-Testing & Usage
-===============
+Testing
+=======
 
-Package includes "genbase" script that allows you to create database with
-IP-addresses (from 172.16.0.0/16 by default) and random bandwidth rates.
-
+Source package includes "genbase" script that allows you to create database
+with IP-addresses and random bandwidth rates.

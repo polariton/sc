@@ -1,13 +1,13 @@
 PROG=sc
-VERSION=1.1.0
+VERSION=1.1.1
 ARCH=$(PROG)-$(VERSION).tar.bz2
 
-MANDIR?=/usr/local/share/man
 DESTDIR?=/usr/local/sbin
+MANDIR?=/usr/local/share/man
 INITDIR?=/etc/init.d
 CFGDIR=/etc/sc
 
-CLFILES?=sc.8.gz sc.conf.5.gz $(ARCH)
+CLFILES?=sc.8.gz sc.conf.5.gz $(ARCH) *.batch
 
 
 man: sc.8.gz sc.conf.5.gz
@@ -20,12 +20,12 @@ sc.conf.5.gz: sc.conf.pod
 	pod2man --section=5 --release=" " --center=" " $^ | gzip > $@
 
 help:
-	@echo "Targets:"
-	@echo "  clean      clean output files"
-	@echo "  install    install program"
-	@echo "  man        (default) generate manpages"
-	@echo "  help       show this message"
-	@echo "  uninstall  uninstall program"
+	@echo "Targets:" ;\
+	 echo "  clean      clean output files" ;\
+	 echo "  install    install program" ;\
+	 echo "  man        (default) generate manpages" ;\
+	 echo "  help       show this message" ;\
+	 echo "  uninstall  uninstall program"
 
 install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf
 	install -o root -g root -m 755 $(PROG) $(DESTDIR)
@@ -33,7 +33,7 @@ install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf
 	install -o root -g root -m 644 sc.8.gz $(MANDIR)/man8
 	install -o root -g root -m 644 sc.conf.5.gz $(MANDIR)/man5
 	mkdir -p $(CFGDIR)
-	if [ -f $(CFGDIR)/sc.conf ]; then\
+	if [ -f $(CFGDIR)/sc.conf ]; then \
 		install -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\
 	else \
 		install -o root -g root -m 644 sc.conf $(CFGDIR) ;\

@@ -163,7 +163,7 @@ my %cmdd = (
 	},
 	'version' => {
 		'handler' => \&cmd_ver,
-		'desc' => 'output version',
+		'desc' => 'output version and copyright information',
 		'priv' => 0,
 	},
 	'dbadd' => {
@@ -745,7 +745,7 @@ sub ip_inttotext
 		$int %= $div;
 	}
 
-	return join '.', @oct;
+	return join q{.}, @oct;
 }
 
 sub log_syslog
@@ -1605,7 +1605,10 @@ sub cmd_status
 
 sub cmd_ver
 {
-	print "$VERSTR\n";
+	print "$VERSTR\n\n";
+
+	pod2usage({ -exitstatus => 'NOEXIT', -verbose => 99,
+		-sections => 'LICENSE AND COPYRIGHT' });
 	return $E_OK;
 }
 
@@ -1615,11 +1618,16 @@ sub cmd_help
 		pod2usage({ -exitstatus => 0, -verbose => 2 });
 	}
 	else {
+		my $linewidth = 80;
+		my $indent = "\ \ \ \ ";
+
 		print "$VERSTR\n\n";
 		pod2usage({ -exitstatus => 'NOEXIT', -verbose => 99,
 			-sections => 'SYNOPSIS|COMMANDS|OPTIONS', -output => \*STDOUT });
-		print "Available database drivers:\n    ",
-			join(', ', DBI->available_drivers), "\n";
+		print "Available database drivers:\n";
+		my $drv = join q{ }, DBI->available_drivers;
+		$drv =~ s/([^\n]{1,$linewidth})(?:\b\s*|\n)/$indent$1\n/goixms;
+		print "$drv\n";
 	}
 	return $E_OK;
 }
@@ -1734,10 +1742,10 @@ sub cmd_ratecvt
 
 sub cmd_calc
 {
-	use Data::Dumper;
-
 	my ($ip) = @_;
+
 	if (!defined $ip) {
+		use Data::Dumper;
 		print Dumper(\%filter_nets);
 		print Dumper(\%class_nets);
 		return $E_OK;
@@ -2206,9 +2214,11 @@ Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 Copyright (c) 2008-2010. Stanislav Kruchinin.
 
-License: GNU GPL version 3 or later L<http://www.gnu.org/licenses/gpl.html>
+License: GNU GPL version 2 or later
+
 This is free software: you are free to change and redistribute it.
-There is NO WARRANTY, to the extent permitted by law.
+There is NO WARRANTY; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE.
 
 =cut
 

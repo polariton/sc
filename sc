@@ -876,7 +876,7 @@ sub rul_add_u32
 	);
 	$TC->(
 		"filter replace dev $o_if parent 1: pref $pref_leaf ".
-		"u32 ht $ht:$key: match ip src $ip flowid 1:$cid"
+		"handle $ht:$key u32 ht $ht:$key: match ip src $ip flowid 1:$cid"
 	);
 
 	$TC->(
@@ -888,7 +888,7 @@ sub rul_add_u32
 	);
 	$TC->(
 		"filter replace dev $i_if parent 1: pref $pref_leaf ".
-		"u32 ht $ht:$key: match ip dst $ip flowid 1:$cid"
+		"handle $ht:$key u32 ht $ht:$key: match ip dst $ip flowid 1:$cid"
 	);
 
 	return $?;
@@ -1487,21 +1487,21 @@ sub cmd_list
 {
 	my @ips = @_;
 	my $ret = $rul_load->();
+	my $fmt = "%4s  %-15s %11s\n";
 
 	if (nonempty($ips[0])) {
 		foreach my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
 			my $cid = ip_classid($ip);
 			if (defined $rul_data{$cid}) {
-				printf "%4s  %-15s %10s\n", $cid, $rul_data{$cid}{'ip'},
+				printf $fmt, $cid, $rul_data{$cid}{'ip'},
 					$rul_data{$cid}{'rate'};
 			}
 		}
 	}
 	else {
 		foreach my $cid (sort { hex $a <=> hex $b } keys %rul_data) {
-			printf "%4s  %-15s %10s\n", $cid, $rul_data{$cid}{'ip'},
-				$rul_data{$cid}{'rate'};
+			printf $fmt, $cid, $rul_data{$cid}{'ip'}, $rul_data{$cid}{'rate'};
 		}
 	}
 	return $ret;

@@ -1,13 +1,15 @@
 #!/usr/bin/perl
 
-# genbase - generate sc database for testing purposes
+# genbase - generator of random data for sc databases
 
 use strict;
 use warnings;
 use Getopt::Long;
 
+my $rate_unit = 'kibit';
+
 my $PROG = 'genbase';
-my $VERSION = '0.1';
+my $VERSION = '1.0.0';
 
 my $ip_i;
 my $ip_f;
@@ -30,18 +32,19 @@ my $intip_i = ip_texttoint($ip_i);
 my $intip_f = ip_texttoint($ip_f);
 
 if ($intip_i > $intip_f || $intip_f - $intip_i > 2**16 - 1) {
-	die "IP interval ${ip_i}-${ip_f} is incorrect";
+	die "$PROG: IP interval ${ip_i}-${ip_f} is incorrect";
 }
 
-open my $SCH, '|-', "./sc -b";
+open my $SCH, q{|-}, './sc -b' or
+	die "$PROG: unable to open pipe for sc";
 
 print $SCH "dbcreate\n" if $create;
 
 for my $i ($intip_i .. $intip_f) {
-	my $random = 1 << (int(rand(9)) + 7);
-	print $SCH "dbadd ", ip_inttotext($i), " ${random}kibit\n";
+	my $rate = 1 << (int(rand(9)) + 7);
+	print {$SCH} "dbadd ", ip_inttotext($i), " $rate$rate_unit\n";
 }
-close $SCH;
+close $SCH or die "$PROG: unable to close pipe for sc";
 
 exit(0);
 
@@ -66,8 +69,7 @@ sub ip_inttotext
 		$oct[$i] = int($int/$div);
 		$int %= $div;
 	}
-
-	return join '.', @oct;
+	return join q{.}, @oct;
 }
 
 sub usage

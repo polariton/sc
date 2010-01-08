@@ -318,7 +318,7 @@ if (-T $cfg_file) {
 	# prepare list of configuration file parameters and get their values
 	for my $i (0..$#cargs) {
 		$cargs[$i] =~ s/^\w+\|//ixms;
-		$cargs[$i] =~ s/[=!].*$//ixms;
+		$cargs[$i] =~ s/[=!+].*$//ixms;
 		${ $optd{$args[$i]} } = $cfg->get( $cargs[$i] );
 	}
 }
@@ -529,7 +529,8 @@ sub set_filter_nets {
 	# Difference between initial numbers for hash tables of 1st and 2nd
 	# nesting levels. Increase this value if you want to set more than 255
 	# netmasks to filter_network parameter.
-	my $ht_21 = 256; my $ht2 = $ht1 + $ht_21;
+	my $ht_21 = 256;
+	my $ht2 = $ht1 + $ht_21;
 
 	foreach my $n (split /\ /ixms, $filter_network) {
 		my ($netip, $netmask) = split /\//ixms, $n;
@@ -797,16 +798,15 @@ sub db_connect
 	if ($db_driver =~ /sqlite/ixms) {
 		$dbh = DBI->connect(
 			"DBI:SQLite:${db_name}",
-			$db_user, $db_pass, { 'RaiseError' => 1, AutoCommit => 1 }
+			$db_user, $db_pass, { RaiseError => 1, AutoCommit => 1 }
 		);
 	}
 	else {
 		$dbh = DBI->connect(
 			"DBI:${db_driver}:dbname=$db_name;host=$db_host",
-			$db_user, $db_pass, { 'RaiseError' => 1, AutoCommit => 1 }
+			$db_user, $db_pass, { RaiseError => 1, AutoCommit => 1 }
 		);
 	}
-
 	return $dbh;
 }
 
@@ -1144,22 +1144,22 @@ sub rul_show_flow
 		foreach my $ip (@ips) {
 			my $cid = ip_classid($ip);
 			print_rules(
-				"\nInput class [$i_if, $cid]:",
+				"TC rules for $ip\n\nInput class [$i_if]:",
 				"$tc -i -s -d class show dev $i_if | ".
 				"fgrep -w -A 3 \"leaf $cid\:\""
 			);
 			print_rules(
-				"\nOutput class [$o_if, $cid]:",
+				"\nOutput class [$o_if]:",
 				"$tc -i -s -d class show dev $o_if | ".
 				"fgrep -w -A 3 \"leaf $cid\:\""
 			);
 			print_rules(
-				"TC rules for $ip\n\nInput qdisc [$i_if, $cid]:",
+				"\nInput qdisc [$i_if]:",
 				"$tc -i -s -d qdisc show dev $i_if | ".
 				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 			);
 			print_rules(
-				"\nOutput qdisc [$o_if, $cid]:",
+				"\nOutput qdisc [$o_if]:",
 				"$tc -i -s -d qdisc show dev $o_if | ".
 				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
 			);
@@ -1189,42 +1189,52 @@ sub rul_show_u32
 
 	if (nonempty($ips[0])) {
 		foreach my $ip (@ips) {
-			my $cid = ip_classid($ip);
+			my $cid;
 
-			# tc filter
-			print_rules(
-				"Input filter [$i_if, $cid]:",
-				"$tc -p -s filter show dev $i_if | ".
-				"fgrep -w -B 1 \"match IP dst $ip/32\""
-			);
-			print_rules(
-				"\nOutput filter [$o_if, $cid]:",
-				"$tc -p -s filter show dev $o_if | ".
-				"fgrep -w -B 1 \"match IP src $ip/32\""
-			);
-			# tc class
-			print_rules(
-				"\nInput class [$i_if, $cid]:",
-				"$tc -i -s -d class show dev $i_if | ".
-				"fgrep -w -A 3 \"leaf $cid\:\""
-			);
-			print_rules(
-				"\nOutput class [$o_if, $cid]:",
-				"$tc -i -s -d class show dev $o_if | ".
-				"fgrep -w -A 3 \"leaf $cid\:\""
-			);
-			# tc qdisc
-			print_rules(
-				"\nInput qdisc [$i_if, $cid]:",
-				"$tc -i -s -d qdisc show dev $i_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
-			);
-			print_rules(
-				"\nOutput qdisc [$o_if, $cid]:",
-				"$tc -i -s -d qdisc show dev $o_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
-			);
-			print "\n";
+			open my $TCFH, '-|', "$tc -p -s filter show dev $i_if"
+				or log_croak("unable to open pipe for $tc");
+			my @tcout = <$TCFH>;
+			close $TCFH or log_carp("unable to close pipe for $tc");
+			for my $i (0 .. $#tcout) {
+				chomp $tcout[$i];
+				if (($ip) = $tcout[$i]
+					=~ /match\ IP\ .*
+						\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
+					if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
+						print BOLD, "Input filter [$i_if]:\n", RESET;
+						print "$tcout[$i-1]\n$tcout[$i]\n";
+						print_rules(
+							"\nOutput filter [$o_if]:",
+							"$tc -p -s filter show dev $o_if | ".
+							"fgrep -w -B 1 \"match IP src $ip/32\""
+						);
+						# tc class
+						print_rules(
+							"\nInput class [$i_if]:",
+							"$tc -i -s -d class show dev $i_if | ".
+							"fgrep -w -A 3 \"leaf $cid\:\""
+						);
+						print_rules(
+							"\nOutput class [$o_if]:",
+							"$tc -i -s -d class show dev $o_if | ".
+							"fgrep -w -A 3 \"leaf $cid\:\""
+						);
+						# tc qdisc
+						print_rules(
+							"\nInput qdisc [$i_if]:",
+							"$tc -i -s -d qdisc show dev $i_if | ".
+							"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+						);
+						print_rules(
+							"\nOutput qdisc [$o_if]:",
+							"$tc -i -s -d qdisc show dev $o_if | ".
+							"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+						);
+						print "\n";
+						last;
+					}
+				}
+			}
 		}
 	}
 	else {

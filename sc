@@ -916,14 +916,14 @@ sub rul_del_u32
 
 	$TC->(
 		"filter del dev $o_if parent 1: pref $pref_hash ".
-		"handle $ht:$key:800 u32"
+		"handle $ht:$key u32"
 	);
 	$TC->("qdisc del dev $o_if parent 1:$cid handle $cid:0");
 	$TC->("class del dev $o_if parent 1: classid 1:$cid");
 
 	$TC->(
 		"filter del dev $i_if parent 1: pref $pref_hash ".
-		"handle $ht:$key:800 u32"
+		"handle $ht:$key u32"
 	);
 	$TC->("qdisc del dev $i_if parent 1:$cid handle $cid:0");
 	$TC->("class del dev $i_if parent 1: classid 1:$cid");
@@ -1189,6 +1189,7 @@ sub rul_show_u32
 
 	if (nonempty($ips[0])) {
 		foreach my $ip (@ips) {
+			arg_check(\&is_ip, $ip, 'IP');
 			my $cid;
 
 			open my $TCFH, '-|', "$tc -p -s filter show dev $i_if"
@@ -1197,38 +1198,36 @@ sub rul_show_u32
 			close $TCFH or log_carp("unable to close pipe for $tc");
 			for my $i (0 .. $#tcout) {
 				chomp $tcout[$i];
-				if (($ip) = $tcout[$i]
-					=~ /match\ IP\ .*
-						\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
+				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
 					if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 						print BOLD, "Input filter [$i_if]:\n", RESET;
 						print "$tcout[$i-1]\n$tcout[$i]\n";
 						print_rules(
 							"\nOutput filter [$o_if]:",
 							"$tc -p -s filter show dev $o_if | ".
-							"fgrep -w -B 1 \"match IP src $ip/32\""
+							"grep -F -w -B 1 \"match IP src $ip/32\""
 						);
 						# tc class
 						print_rules(
 							"\nInput class [$i_if]:",
 							"$tc -i -s -d class show dev $i_if | ".
-							"fgrep -w -A 3 \"leaf $cid\:\""
+							"grep -F -w -A 3 \"leaf $cid\:\""
 						);
 						print_rules(
 							"\nOutput class [$o_if]:",
 							"$tc -i -s -d class show dev $o_if | ".
-							"fgrep -w -A 3 \"leaf $cid\:\""
+							"grep -F -w -A 3 \"leaf $cid\:\""
 						);
 						# tc qdisc
 						print_rules(
 							"\nInput qdisc [$i_if]:",
 							"$tc -i -s -d qdisc show dev $i_if | ".
-							"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+							"grep -F -w -A 2 \"$cid\: parent 1:$cid\""
 						);
 						print_rules(
 							"\nOutput qdisc [$o_if]:",
 							"$tc -i -s -d qdisc show dev $o_if | ".
-							"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+							"grep -F -w -A 2 \"$cid\: parent 1:$cid\""
 						);
 						print "\n";
 						last;

@@ -121,7 +121,7 @@ my %cmdd = (
 	},
 	'init' => {
 		'handler' => \&cmd_init,
-		'desc' => 'initialization of shaping rules',
+		'desc' => 'initialization of rules',
 		'priv' => 1,
 	},
 	'sync' => {
@@ -511,6 +511,11 @@ sub set_ptrs
 		$rul_load = \&rul_load_u32;
 		$rul_show = \&rul_show_u32;
 		$rul_reset = \&rul_reset_tc;
+	}
+	else {
+		log_croak(
+			"\'$filter_method\' is invalid value for filter_method parameter"
+		);
 	}
 	return;
 }
@@ -1146,22 +1151,22 @@ sub rul_show_flow
 			print_rules(
 				"TC rules for $ip\n\nInput class [$i_if]:",
 				"$tc -i -s -d class show dev $i_if | ".
-				"fgrep -w -A 3 \"leaf $cid\:\""
+				"grep -F -w -A 3 \"leaf $cid\:\""
 			);
 			print_rules(
 				"\nOutput class [$o_if]:",
 				"$tc -i -s -d class show dev $o_if | ".
-				"fgrep -w -A 3 \"leaf $cid\:\""
+				"grep -F -w -A 3 \"leaf $cid\:\""
 			);
 			print_rules(
 				"\nInput qdisc [$i_if]:",
 				"$tc -i -s -d qdisc show dev $i_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+				"grep -F -w -A 2 \"$cid\: parent 1:$cid\""
 			);
 			print_rules(
 				"\nOutput qdisc [$o_if]:",
 				"$tc -i -s -d qdisc show dev $o_if | ".
-				"fgrep -w -A 2 \"$cid\: parent 1:$cid\""
+				"grep -F -w -A 2 \"$cid\: parent 1:$cid\""
 			);
 			print_rules("\nIPSet entry for $ip:", "$ipset -T $set_name $ip");
 			print "\n";

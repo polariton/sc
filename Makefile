@@ -1,5 +1,5 @@
 PROG=sc
-VERSION=1.1.2
+VERSION=1.2.0
 ARCH=$(PROG)-$(VERSION).tar.bz2
 
 DESTDIR?=/usr/local/sbin

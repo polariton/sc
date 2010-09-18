@@ -19,8 +19,9 @@ Installation
 ============
 
 0. Install Linux kernel that supports "u32" classifier (CONFIG_NET_CLS_U32),
-traffic control actions (CONFIG_NET_CLS_ACT, CONFIG_NET_CLS_GACT), and "flow"
-classifier (CONFIG_NET_CLS_FLOW).
+traffic control actions (CONFIG_NET_CLS_ACT, CONFIG_NET_CLS_GACT), traffic
+policing (CONFIG_NET_ACT_POLICE), and (optionally) "flow" classifier
+(CONFIG_NET_CLS_FLOW).
 
 1. Install Perl 5 and the following modules:
 AppConfig, DBI, DBD-module for your database (DBD::Pg, DBD::SQLite,
@@ -36,10 +37,11 @@ DBD::mysql, etc), Getopt::Long, Pod::Usage, Term::ANSIColor, Sys::Syslog.
      # cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage \
 	     Term::ANSIColor Sys::Syslog
 
-If you see that output of "sc help" command is broken, install Pod::Usage
-module from CPAN.
+If you see that the output of "sc help" command is broken, please update
+Pod::Usage module from CPAN.
 
-2. Install iproute2 suite.
+2. Install iproute2 suite. The latest version from
+<http://deversources.linuxfoundation.org/dev/iproute2/download> is preferred.
 
 3. Install iptables and ipset <http://ipset.netfilter.org/> if you want to use
 "flow" classifier.
@@ -67,11 +69,11 @@ can use any other DBI-compatible database server like MySQL, PostgreSQL or
 Oracle. If you plan to load the data from a remote database on a dedicated
 billing server, you must install corresponding Perl DBD module, configure
 database driver and SQL-queries that will produce correct output for sc.
-First column must contain an IP-addresses in integer representation, and
-second column provides the integer bandwith rate values (see default value of
-"query_create" parameter).
+The first column must contain an IP-addresses in integer representation, and
+the second column provides the integer bandwith rate values (see default value
+of "query_create" parameter).
 
-Rate units are defined by the "rate_unit" parameter in sc.conf or by similar
+Rate units are defined by "rate_unit" parameter in sc.conf or by similar
 command line option. Default rate unit is 1 Kibit/s = 1024 bit/s.
 
 If you plan to use shaper with it's own SQLite database, you need to create it
@@ -81,21 +83,21 @@ and add some data.
 # sc dbadd 172.16.0.1 10Mibit
 # sc dbadd 172.16.0.2 20Mibit
 
-You also may use "genbase" script to generate some database entries with
+You may also use "genbase" script to generate some database entries with
 random values of bandwidth rates.
 
 
 2. Synchronization of rules with database
 
-To perform synchronization of shaping rules with database you should add a
-corresponding line to your crontab file. In the following example
-synchronization of rules will be performed every 10 minutes.
+To perform synchronization of the shaping rules with the database you should
+add a corresponding line to your crontab file. The following example creates
+cron task which performs synchronization of rules every 10 minutes:
 
 */10 * * * * root /usr/local/sbin/sc sync
 
 3. Syslog
 
-SC can log errors and warnings through syslog. To enable this feature set the
+SC can log errors and warnings through syslog. To enable this feature set
 "syslog" option to 1 in /etc/sc/sc.conf.
 
 Testing
@@ -103,3 +105,4 @@ Testing
 
 Source package includes "genbase" script that allows you to create database
 with IP-addresses and random bandwidth rates.
+

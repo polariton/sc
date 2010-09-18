@@ -2083,9 +2083,9 @@ tc(8) from B<iproute2> suite.
 
 =over
 
-=item B<u32> classifier (option B<CONFIG_NET_CLS_U32>=m or y)
+=item * B<u32> classifier (option B<CONFIG_NET_CLS_U32>=m or y)
 
-=item Traffic control actions (B<CONFIG_NET_CLS_ACT>=y and
+=item * Traffic control actions (B<CONFIG_NET_CLS_ACT>=y and
 B<CONFIG_NET_CLS_GACT>=m or y)
 
 =back
@@ -2097,6 +2097,9 @@ If you want to use B<flow> filtering method, you should install iptables(8)
 and ipset(8), B<flow> classifier (kernel version 2.6.25 or above, option
 B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> kernel modules (see
 L<http://ipset.netfilter.org/> for details).
+
+If you prefer policing rather than shaping, you should enable the kernel
+option B<CONFIG_NET_ACT_POLICE>.
 
 
 =head1 COMMANDS

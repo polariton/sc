@@ -59,6 +59,7 @@ my $leaf_qdisc = 'pfifo limit 50';
 my $network = '172.16.0.0/16';
 my $filter_network = $network;
 my $filter_method = 'u32';
+my $limit_method = 'shaping';
 
 my (%filter_nets, %class_nets);
 
@@ -71,7 +72,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.1.2';
+my $VERSION = '1.2.0';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -252,6 +253,7 @@ my %optd = (
 	'o|out_if=s'        => \$o_if,
 	'i|in_if=s'         => \$i_if,
 	'filter_method=s'   => \$filter_method,
+	'limit_method=s'    => \$limit_method,
 	'd|debug=i'         => \$debug,
 	'v|verbose!'        => \$verbose,
 	'q|quiet!'          => \$quiet,
@@ -498,7 +500,7 @@ sub set_ptrs
 			rul_reset_tc();
 		};
 	}
-	elsif ($filter_method eq 'u32') {
+	elsif ($filter_method eq 'u32' && $limit_method eq 'shaping') {
 		$rul_init = sub {
 			rul_init_u32($o_if, 'src', 12);
 			rul_init_u32($i_if, 'dst', 16);
@@ -511,6 +513,30 @@ sub set_ptrs
 		$rul_load = \&rul_load_u32;
 		$rul_show = \&rul_show_u32;
 		$rul_reset = \&rul_reset_tc;
+	}
+	elsif ($filter_method eq 'u32' && $limit_method eq 'policing') {
+		$rul_init = sub {
+			rul_init_policer($o_if, 'dst', 16);
+			rul_init_policer($i_if, 'src', 12);
+		};
+		$rul_add = \&rul_add_policer;
+		$rul_del = \&rul_del_policer;
+		$rul_change = \&rul_add_policer;
+		$rul_batch_start = sub { batch_start_tc() if !$verbose; };
+		$rul_batch_stop = sub { batch_stop_tc() if !$verbose; };
+		$rul_load = \&rul_load_policer;
+		$rul_show = \&rul_show_policer;
+		$rul_reset = \&rul_reset_policer;
+	}
+	elsif ($limit_method eq 'policing' && $filter_method ne 'u32') {
+		log_croak(
+			'Policing can be used only when filter_method = \'u32\''
+		);
+	}
+	elsif ($limit_method ne 'policing' || $limit_method ne 'shaping') {
+		log_croak(
+			"\'$limit_method\' is invalid value for limit_method parameter"
+		);
 	}
 	else {
 		log_croak(
@@ -899,6 +925,27 @@ sub rul_add_u32
 	return $?;
 }
 
+sub rul_add_policer
+{
+	my ($ip, $cid, $rate) = @_;
+	my ($ht, $key) = ip_leafht_key($ip);
+	my $ceil = $rate;
+
+	$TC->(
+		"filter replace dev $o_if parent ffff: pref $pref_leaf ".
+		"handle $ht:$key u32 ht $ht:$key: match ip dst $ip ".
+		"police rate $rate burst 1000000 drop flowid ffff:"
+	);
+
+	$TC->(
+		"filter replace dev $i_if parent ffff: pref $pref_leaf ".
+		"handle $ht:$key u32 ht $ht:$key: match ip src $ip ".
+		"police rate $rate burst 1000000 drop flowid ffff:"
+	);
+
+	return $?;
+}
+
 sub rul_del_flow
 {
 	my ($ip, $cid) = @_;
@@ -932,6 +979,24 @@ sub rul_del_u32
 	);
 	$TC->("qdisc del dev $i_if parent 1:$cid handle $cid:0");
 	$TC->("class del dev $i_if parent 1: classid 1:$cid");
+
+	return $?
+}
+
+sub rul_del_policer
+{
+	my ($ip, $cid) = @_;
+	my ($ht, $key) = ip_leafht_key($ip);
+
+	$TC->(
+		"filter del dev $o_if parent ffff: pref $pref_hash ".
+		"handle $ht:$key u32"
+	);
+
+	$TC->(
+		"filter del dev $i_if parent ffff: pref $pref_hash ".
+		"handle $ht:$key u32"
+	);
 
 	return $?
 }
@@ -1006,6 +1071,43 @@ sub rul_load_u32
 			=~ /match\ IP\ .*\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
 			if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 				$rul_data{$cid}{'ip'} = $ip;
+			}
+		}
+	}
+
+	open my $TCCH, '-|', "$tc class show dev $i_if"
+		or log_croak("unable to open pipe for $tc");
+	@tcout = <$TCCH>;
+	close $TCCH or log_carp("unable to close pipe for $tc");
+	foreach (@tcout) {
+		if (($cid, $rate) = /leaf\ ([0-9a-f]+):\ .*\ rate\ (\w+)/xms) {
+			next if !defined $rul_data{$cid};
+			$rate = rate_cvt($rate, $rate_unit);
+			$rul_data{$cid}{'rate'} = $rate;
+		}
+	}
+
+	return $ret;
+}
+
+sub rul_load_policer
+{
+	my ($ip, $cid, $rate);
+	my $ret = $E_OK;
+
+	open my $TCFH, '-|', "$tc -p -iec filter show dev $i_if parent ffff:"
+		or log_croak("unable to open pipe for $tc");
+	my @tcout = <$TCFH>;
+	close $TCFH or log_carp("unable to close pipe for $tc");
+	for my $i (0 .. $#tcout) {
+		chomp $tcout[$i];
+		if (($ip) = $tcout[$i]
+			=~ /match\ IP\ .*\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
+			$cid = ip_classid($ip);
+			if (($rate) = $tcout[$i+1] =~ /rate\ ([0-9A-z]+)/xms) {
+				$rate = rate_cvt($rate, $rate_unit);
+				$rul_data{$cid}{'ip'} = $ip;
+				$rul_data{$cid}{'rate'} = $rate;
 			}
 		}
 	}
@@ -1141,6 +1243,78 @@ sub rul_init_u32
 	return $?;
 }
 
+sub rul_init_policer
+{
+	my ($dev, $match, $offset) = @_;
+
+	$TC->("qdisc add dev $dev handle ffff: ingress");
+	$TC->("filter add dev $dev parent ffff: protocol ip pref $pref_hash u32");
+	foreach my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
+	  keys %filter_nets) {
+		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
+		my $netmask = $filter_nets{$net}{'mask'};
+
+		if ($netmask >= 24 && $netmask < 31) {
+			my ($div1, $hmask1) = div_hmask_u32($netmask, 4);
+			$TC->(
+				"filter add dev $dev parent ffff: protocol ip ".
+				"pref $pref_hash handle $ht1: u32 divisor $div1"
+			);
+			$TC->(
+				"filter add dev $dev parent ffff: protocol ip ".
+				"pref $pref_hash u32 ht 800:: match ip $match $net ".
+				"hashkey mask $hmask1 at $offset link $ht1:"
+			);
+		}
+		elsif ($netmask >= 16 && $netmask < 24) {
+			my @oct = split /\./ixms, $filter_nets{$net}{'ip'};
+			my ($div1, $hmask1) = div_hmask_u32($netmask, 3);
+
+			# parent filter
+			$TC->(
+				"filter add dev $dev parent ffff: protocol ip ".
+				"pref $pref_hash handle $ht1: u32 divisor $div1"
+			);
+			$TC->(
+				"filter add dev $dev parent ffff: protocol ip ".
+				"pref $pref_hash u32 ht 800:: match ip $match $net ".
+				"hashkey mask $hmask1 at $offset link $ht1:"
+			);
+
+			# child filters
+			my ($div2, $hmask2) = div_hmask_u32($netmask, 4);
+			for my $i (0 .. $div1 - 1) {
+				my $key = sprintf '%x', $i;
+				my $ht2 = sprintf '%x', $filter_nets{$net}{'leafht_i'} + $i;
+				my $j = $oct[2] + $i;
+				my $net2 = "$oct[0].$oct[1].$j.0/24";
+
+				$TC->(
+					"filter add dev $dev parent ffff: protocol ip ".
+					"pref $pref_hash handle $ht2: u32 divisor $div2"
+				);
+				$TC->(
+					"filter add dev $dev parent ffff: protocol ip ".
+					"pref $pref_hash u32 ht $ht1:$key: ".
+					"match ip $match $net2 ".
+					"hashkey mask $hmask2 at $offset link $ht2:"
+				);
+			}
+		}
+		else {
+			log_croak("network mask \'\/$netmask\' is not supported");
+		}
+	}
+
+	# block all other traffic
+	$TC->(
+		"filter add dev $dev parent ffff:0 protocol ip pref $pref_default ".
+		'u32 match u32 0x0 0x0 at 0 police mtu 1 action drop'
+	);
+
+	return $?;
+}
+
 sub rul_show_flow
 {
 	my @ips = @_;
@@ -1256,6 +1430,56 @@ sub rul_show_u32
 	return $?;
 }
 
+sub rul_show_policer
+{
+	my @ips = @_;
+
+	if (nonempty($ips[0])) {
+		foreach my $ip (@ips) {
+			arg_check(\&is_ip, $ip, 'IP');
+			my $cid;
+			my @tcout;
+
+			open my $TCFH, '-|', "$tc -p -s -iec filter show dev $i_if parent ffff:"
+				or log_croak("unable to open pipe for $tc");
+			@tcout = <$TCFH>;
+			close $TCFH or log_carp("unable to close pipe for $tc");
+			for my $i (0 .. $#tcout) {
+				chomp $tcout[$i];
+				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+					print BOLD, "Input filter [$i_if]:\n", RESET;
+					for my $j ($i-1 .. $i+1) {
+						print "$tcout[$j]\n";
+					}
+					last;
+				}
+			}
+			open $TCFH, '-|', "$tc -p -s -iec filter show dev $o_if parent ffff:"
+				or log_croak("unable to open pipe for $tc");
+			@tcout = <$TCFH>;
+			close $TCFH or log_carp("unable to close pipe for $tc");
+			for my $i (0 .. $#tcout) {
+				chomp $tcout[$i];
+				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+					print BOLD, "Output filter [$o_if]:\n", RESET;
+					for my $j ($i-1 .. $i+1) {
+						print "$tcout[$j]\n";
+					}
+					last;
+				}
+			}
+		}
+	}
+	else {
+		print BOLD, "POLICYING FILTERS [$i_if]:\n", RESET;
+		system "$tc -p -s filter show dev $i_if parent ffff:";
+		print BOLD, "POLICYING FILTERS [$o_if]:\n", RESET;
+		system "$tc -p -s filter show dev $o_if parent ffff:";
+		return $?;
+	}
+	return $?;
+}
+
 sub rul_reset_ips
 {
 	if ($chain_name ne 'FORWARD') {
@@ -1282,6 +1506,13 @@ sub rul_reset_tc
 {
 	$sys->("$tc qdisc del dev $o_if root handle 1: htb");
 	$sys->("$tc qdisc del dev $i_if root handle 1: htb");
+	return $?;
+}
+
+sub rul_reset_policer
+{
+	$sys->("$tc qdisc del dev $o_if handle ffff: ingress");
+	$sys->("$tc qdisc del dev $i_if handle ffff: ingress");
 	return $?;
 }
 
@@ -1593,28 +1824,54 @@ sub cmd_sync
 sub cmd_status
 {
 	my @out;
-	open my $PIPE, '-|', "$tc qdisc show dev $o_if"
+	my $PIPE;
+	open $PIPE, '-|', "$tc qdisc show dev $o_if"
 		or log_croak("unable to open pipe for $tc");
 	@out = <$PIPE>;
 	close $PIPE or log_croak("unable to close pipe for $tc");
 
-	if ($out[0] !~ /^qdisc\ htb/xms) {
+	my $rqdisc;
+	if ($out[0] =~ /^qdisc\ htb/xms) {
+		$rqdisc = 'htb';
+	}
+	elsif (defined $out[1]) {
+		if ($out[1] =~ /^qdisc\ ingress/xms) {
+			$rqdisc = 'ingress';
+		}
+	}
+	else {
 		log_warn('no shaping rules found');
 		return $E_UNDEF;
 	}
 
-	my @lqd = split /\ /xms, $leaf_qdisc;
-	my $lqdisk = $lqd[0];
-	shift @out;
-	foreach my $s (@out) {
-		chomp $s;
-		if ($s =~ /qdisc\ $lqdisk\ ([0-9a-f]+):/xms) {
-			log_warn('shaping rules were successfully created');
-			return $E_OK;
+	if ($rqdisc eq 'htb') {
+		my @lqd = split /\ /xms, $leaf_qdisc;
+		my $lqdisk = $lqd[0];
+		shift @out;
+		foreach my $s (@out) {
+			chomp $s;
+			if ($s =~ /qdisc\ $lqdisk\ ([0-9a-f]+):/xms) {
+				log_warn('shaping rules were successfully created');
+				return $E_OK;
+			}
 		}
+		log_warn('htb qdisc found but there is no child queues');
 	}
-	log_warn('htb qdisc found but there is no child queues');
-	return $E_NOTEXIST;
+	elsif ($rqdisc eq 'ingress') {
+		open $PIPE, '-|', "$tc -p filter show dev $o_if parent ffff:"
+			or log_croak("unable to open pipe for $tc");
+		@out = <$PIPE>;
+		close $PIPE or log_croak("unable to close pipe for $tc");
+		foreach my $s (@out) {
+			if ($s =~ /match IP.*\/32/) {
+				log_warn('shaping rules were successfully created');
+				return $E_OK;
+			}
+		}
+		log_warn('ingress qdisc found but there is no filters for IPs');
+		return $E_UNDEF;
+	}
+	return $E_UNDEF;
 }
 
 sub cmd_ver
@@ -1951,9 +2208,25 @@ Name of output network interface
 
 Name of input network interface
 
-=item B<-d>, B<--debug> level
+=item B<-d>, B<--debug> mode
 
-Set debugging level (from 0 to 2)
+Possible values:
+
+=over
+
+=item B<0>
+
+no debug (default value),
+
+=item B<1>
+
+print command lines with nonzero return values,
+
+=item B<2>
+
+print all command lines without execution.
+
+=back
 
 =item B<-v>, B<--verbose>
 

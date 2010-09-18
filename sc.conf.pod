@@ -55,6 +55,13 @@ use u32 hashing filters.
 
 =back
 
+=item B<limit_method>
+
+Rate limiting method.
+Default value: shaping.
+Possible values: B<shaping> or B<policing>.
+Note, that B<policing> only works with B<u32> filtering method.
+
 =item B<debug>
 
 Debug modes.
@@ -83,14 +90,12 @@ print all command lines without execution.
 When enabled, turns on verbose messages and disables piping of tc(8) and
 ipset(8) rules.
 Default value: 0.
-
 Possible values: boolean.
 
 =item B<quiet>
 
 Suppress output. Does not affect messages caused by C<verbose> flag.
 Default value: 0.
-
 Possible values: boolean.
 
 =item B<colored>
@@ -98,7 +103,6 @@ Possible values: boolean.
 Colorize output using ANSI escape sequences.
 Autodetection of non-tty handles is supported.
 Default value: 1.
-
 Possible values: boolean.
 
 =item B<joint>
@@ -113,9 +117,7 @@ set.
 When filter_method = u32, it should contain the list of networks for classid
 calculation.
 This networks must cover all IPs which you are going to use in shaping rules.
-
-Default value: 172.16.0.0/16
-
+Default value: 172.16.0.0/16.
 Possible values:
 A single network with mask from 16 to 31 for B<flow> method.
 A list of networks with mask from 16 to 31 for B<u32> method.
@@ -138,7 +140,6 @@ by a single hashing filer
 	filter_network = 10.0.0.0/16
 
 Default value: same as B<network> parameter.
-
 Possible values: a list of network with mask from 16 to 31 that is equivalent
 or includes the networks specified in B<network> parameter.
 
@@ -146,26 +147,20 @@ or includes the networks specified in B<network> parameter.
 
 Amount of bytes a stream is allowed to dequeue before the next queue gets a
 turn.
-
 Default value: 1500.
-
 Possible values: integer numbers >= MTU of the interface.
 
 =item B<rate_unit>
 
 Default rate unit.
-
 Default value: kibit.
-
 Possible values: see sc(8).
 
 =item B<leaf_qdisc>
 
 Leaf queueing discipline with parameters. This string will be used as a tail
 of corresponding C<tc qdisc ...> command line.
-
 Default value: C<pfifo limit 50>.
-
 Possible values: all classless qdiscs supported by tc(8).
 
 =item B<set_name>
@@ -197,60 +192,46 @@ for IPs from arbitrary /16 networks
 =item B<set_size>
 
 Size of IP hash for ipset(8).
-
 Default value: 65536.
-
 Possible values: from 1024 to 65536.
 
 =item B<chain>
 
 Name of iptables(8) chain that will contain rules for shaped IPs.
-
 Default value: FORWARD.
-
 For names other than FORWARD the new chain will be created and attached to
 FORWARD chain.
 
 =item B<db_host>
 
 Database host.
-
 Default value: 127.0.0.1.
-
 Possible values: IP-address or domain name.
 
 =item B<db_driver>
 
 Database driver.
-
 Default value: SQLite.
-
 Possible values: all database drivers supported by Perl DBI module.
 See output of C<sc help> command for the list of available drivers.
 
 =item B<db_user>
 
 Username to use when connecting to database.
-
 Default value: user.
-
 Possible values: depends on database server.
 
 =item B<db_pass>
 
 The password to use when connecting to database. Remember that specifying a
 password on the command line is insecure.
-
 Default value: password.
-
 Possible values: arbitrary string.
 
 =item B<db_name>
 
 Database name to use.
-
 Default value: sc.db.
-
 Possible values: arbibrary string (should be a valid filename in case of
 SQLite driver).
 
@@ -258,6 +239,8 @@ SQLite driver).
 
 Default values of queries are used for handling SQLite database
 F</etc/sc/sc.db>.
+
+List of queries:
 
 =over 16
 
@@ -287,7 +270,6 @@ modify existing entry.
 
 =back
 
-
 =item B<syslog>
 
 Output errors and warnings to syslog.
@@ -297,7 +279,8 @@ Possible values: boolean.
 =item B<syslog_options>
 
 Syslog options.
-Default value: empty string.
+Default value: <empty string>.
+
 Possible values (comma-separated):
 
 =over 12

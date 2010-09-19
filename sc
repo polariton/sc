@@ -53,6 +53,7 @@ my $set_name = 'pass';
 my $set_type = 'ipmap';
 my $set_size = '65536';
 my $chain_name = 'FORWARD';
+my $policer_burst = '1500k';
 my $quantum = '1500';
 my $rate_unit = 'kibit';
 my $leaf_qdisc = 'pfifo limit 50';
@@ -262,6 +263,7 @@ my %optd = (
 	'b|batch!'          => \$batch,
 	'N|network=s'       => \$network,
 	'filter_network=s'  => \$filter_network,
+	'policer_burst=s'   => \$policer_burst,
 	'quantum=s'         => \$quantum,
 	'u|rate_unit=s'     => \$rate_unit,
 	'leaf_qdisc=s'      => \$leaf_qdisc,
@@ -934,13 +936,13 @@ sub rul_add_policer
 	$TC->(
 		"filter replace dev $o_if parent ffff: pref $pref_leaf ".
 		"handle $ht:$key u32 ht $ht:$key: match ip dst $ip ".
-		"police rate $rate burst 1000000 drop flowid ffff:"
+		"police rate $rate burst $policer_burst drop flowid ffff:"
 	);
 
 	$TC->(
 		"filter replace dev $i_if parent ffff: pref $pref_leaf ".
 		"handle $ht:$key u32 ht $ht:$key: match ip src $ip ".
-		"police rate $rate burst 1000000 drop flowid ffff:"
+		"police rate $rate burst $policer_burst drop flowid ffff:"
 	);
 
 	return $?;

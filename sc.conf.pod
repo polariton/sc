@@ -143,6 +143,14 @@ Default value: same as B<network> parameter.
 Possible values: a list of network with mask from 16 to 31 that is equivalent
 or includes the networks specified in B<network> parameter.
 
+=item B<policer_burst>
+
+Amount of bytes to buffer for every filter with policing rules.
+Default value: 1500Kb.
+This value is suitable for users with large bandwidths (up to 40mibit/s).
+If the average bandwidths in your network are much lower, feel free to
+decrease it.
+
 =item B<quantum>
 
 Amount of bytes a stream is allowed to dequeue before the next queue gets a

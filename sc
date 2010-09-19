@@ -2498,8 +2498,8 @@ filters is limited by 0x799.
 
 sc.conf(5), tc(8), tc-htb(8), iptables(8), ipset(8), Getopt::Long(3),
 AppConfig(3),
-L<http://lartc.org/howto/lartc.adv-filter.hashing.html>,
-L<http://www.mail-archive.com/netdev@vger.kernel.org/msg60638.html>.
+http://lartc.org/howto/lartc.adv-filter.hashing.html,
+http://www.mail-archive.com/netdev@vger.kernel.org/msg60638.html.
 
 
 =head1 AUTHOR

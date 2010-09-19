@@ -23,8 +23,9 @@ help:
 	@echo "Targets:" ;\
 	 echo "  clean      clean output files" ;\
 	 echo "  install    install program" ;\
-	 echo "  man        (default) generate manpages" ;\
 	 echo "  help       show this message" ;\
+	 echo "  man        (default) generate manpages" ;\
+	 echo "  srcdist    create archive with source distribution" ;\
 	 echo "  uninstall  uninstall program"
 
 install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf

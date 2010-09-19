@@ -2264,9 +2264,14 @@ details).
 
 Network(s) for hashing filter generation (see sc.conf(5) for details).
 
+=item B<--policer_burst> size
+
+Amount of bytes to buffer for every filter with policing rules.
+
 =item B<--quantum> size
 
-Size of quantum for child queues
+Amount of bytes a stream is allowed to dequeue before the next queue gets a
+turn.
 
 =item B<-u>, B<--rate_unit> unit
 

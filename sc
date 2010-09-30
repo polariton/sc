@@ -1070,8 +1070,7 @@ sub rul_load_u32
 	close $TCFH or log_carp("unable to close pipe for $tc");
 	for my $i (0 .. $#tcout) {
 		chomp $tcout[$i];
-		if (($ip) = $tcout[$i]
-			=~ /match\ IP\ .*\ ($ip_re)\/32/xms) {
+		if (($ip) = $tcout[$i] =~ /match\ IP\ .*\ ($ip_re)\/32/xms) {
 			if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 				$rul_data{$cid}{'ip'} = $ip;
 			}
@@ -2090,7 +2089,7 @@ tc(8) from B<iproute2> suite.
 =item * B<u32> classifier (option B<CONFIG_NET_CLS_U32>=m or y)
 
 =item * Traffic control actions (B<CONFIG_NET_CLS_ACT>=y and
-B<CONFIG_NET_CLS_GACT>=m or y)
+B<CONFIG_NET_ACT_GACT>=m or y)
 
 =back
 

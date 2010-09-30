@@ -3,11 +3,11 @@ Shaper Control Tool Readme
 Download & update
 =================
 
-Project page at BitBucket:
-  http://bitbucket.org/sky/sc/
-
 Project page at Sourceforge:
   http://sourceforge.net/projects/sc-tool/
+
+Project page at BitBucket:
+  http://bitbucket.org/sky/sc/
 
 Source code repositories:
   http://bitbucket.org/sky/sc/src/
@@ -19,7 +19,7 @@ Installation
 ============
 
 0. Install Linux kernel that supports "u32" classifier (CONFIG_NET_CLS_U32),
-traffic control actions (CONFIG_NET_CLS_ACT, CONFIG_NET_CLS_GACT), traffic
+traffic control actions (CONFIG_NET_CLS_ACT, CONFIG_NET_ACT_GACT), traffic
 policing (CONFIG_NET_ACT_POLICE), and (optionally) "flow" classifier
 (CONFIG_NET_CLS_FLOW).
 
@@ -43,8 +43,8 @@ Pod::Usage module from CPAN.
 2. Install iproute2 suite. The latest version from
 <http://deversources.linuxfoundation.org/dev/iproute2/download> is preferred.
 
-3. Install iptables and ipset <http://ipset.netfilter.org/> if you want to use
-"flow" classifier.
+3. Install iptables and ipset <http://ipset.netfilter.org/> if you are
+planning to use "flow" classifier.
 
 5. Install sc, manpages, configuration file and init script.
 

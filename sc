@@ -199,6 +199,7 @@ my %cmdd = (
 	},
 );
 
+# pointer
 my ($rul_init, $rul_add, $rul_del, $rul_change, $rul_load,
 	$rul_batch_start, $rul_batch_stop, $rul_show, $rul_reset);
 
@@ -300,7 +301,7 @@ my $sys;
 my $pref_hash = 10; # hashing filters and flow
 my $pref_leaf = 20; # hash table entries
 my $pref_default = 30; # default rule
-
+my $ip_re = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}';
 
 ##############################################################################
 # Main routine
@@ -532,7 +533,7 @@ sub set_ptrs
 	}
 	elsif ($limit_method eq 'policing' && $filter_method ne 'u32') {
 		log_croak(
-			'Policing can be used only when filter_method = \'u32\''
+			'Policing can be used only when filter_method = u32'
 		);
 	}
 	elsif ($limit_method ne 'policing' || $limit_method ne 'shaping') {
@@ -1030,7 +1031,7 @@ sub rul_load_flow
 	my @ipsout = <$IPH>;
 	close $IPH or log_carp("unable to close pipe for $ipset");
 	foreach (@ipsout) {
-		next unless /^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/xms;
+		next unless /^$ip_re/xms;
 		chomp;
 		$ip = $_;
 		$cid = ip_classid($ip);
@@ -1070,7 +1071,7 @@ sub rul_load_u32
 	for my $i (0 .. $#tcout) {
 		chomp $tcout[$i];
 		if (($ip) = $tcout[$i]
-			=~ /match\ IP\ .*\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
+			=~ /match\ IP\ .*\ ($ip_re)\/32/xms) {
 			if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 				$rul_data{$cid}{'ip'} = $ip;
 			}
@@ -1103,8 +1104,7 @@ sub rul_load_policer
 	close $TCFH or log_carp("unable to close pipe for $tc");
 	for my $i (0 .. $#tcout) {
 		chomp $tcout[$i];
-		if (($ip) = $tcout[$i]
-			=~ /match\ IP\ .*\ (\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/32/xms) {
+		if (($ip) = $tcout[$i] =~ /match\ IP\ .*\ ($ip_re)\/32/xms) {
 			$cid = ip_classid($ip);
 			if (($rate) = $tcout[$i+1] =~ /rate\ ([0-9A-z]+)/xms) {
 				$rate = rate_cvt($rate, $rate_unit);
@@ -1442,7 +1442,8 @@ sub rul_show_policer
 			my $cid;
 			my @tcout;
 
-			open my $TCFH, '-|', "$tc -p -s -iec filter show dev $i_if parent ffff:"
+			open my $TCFH, '-|',
+				"$tc -p -s -iec filter show dev $i_if parent ffff:"
 				or log_croak("unable to open pipe for $tc");
 			@tcout = <$TCFH>;
 			close $TCFH or log_carp("unable to close pipe for $tc");
@@ -1456,7 +1457,8 @@ sub rul_show_policer
 					last;
 				}
 			}
-			open $TCFH, '-|', "$tc -p -s -iec filter show dev $o_if parent ffff:"
+			open $TCFH, '-|',
+				"$tc -p -s -iec filter show dev $o_if parent ffff:"
 				or log_croak("unable to open pipe for $tc");
 			@tcout = <$TCFH>;
 			close $TCFH or log_carp("unable to close pipe for $tc");
@@ -1865,7 +1867,7 @@ sub cmd_status
 		@out = <$PIPE>;
 		close $PIPE or log_croak("unable to close pipe for $tc");
 		foreach my $s (@out) {
-			if ($s =~ /match IP.*\/32/) {
+			if ($s =~ /match\ IP.*\/32/xms) {
 				log_warn('shaping rules were successfully created');
 				return $E_OK;
 			}
@@ -2124,8 +2126,6 @@ Change rate for specified IP
 =item B<dbadd> <ip> <rate>
 
 Add database entry
-
-=cut
 
 =item B<dbchange> | B<dbmod> <ip> <rate>
 

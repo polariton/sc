@@ -31,7 +31,7 @@ DBD::mysql, etc), Getopt::Long, Pod::Usage, Term::ANSIColor, Sys::Syslog.
 
      Example for Debian:
      # aptitude install perl perl-base perl-doc perl-modules libdbi-perl \
-	     libdbd-sqlite3-perl libappconfig-perl libpod-parser-perl
+	     libdbd-sqlite3-perl libappconfig-perl
 
   b. Installation of modules from CPAN.
      # cpan AppConfig DBI DBD::SQLite Getopt::Long Pod::Usage \

@@ -26,7 +26,11 @@ my $DEBUG_ON    = 1; # print command line that caused error
 my $DEBUG_PRINT = 2; # print all commands instead of executing them
 my $debug = $DEBUG_OFF;
 
+my $VERB_OFF = 0; # no verbose messages
+my $VERB_ON = 1; # enable messages
+my $VERB_NOBATCH = 2; # disable batch modes of tc and ipset
 my $verbose = 0;
+
 my $quiet = 0;
 my $colored = 1;
 my $batch = 0;
@@ -257,7 +261,7 @@ my %optd = (
 	'filter_method=s'   => \$filter_method,
 	'limit_method=s'    => \$limit_method,
 	'd|debug=i'         => \$debug,
-	'v|verbose!'        => \$verbose,
+	'v|verbose=i'       => \$verbose,
 	'q|quiet!'          => \$quiet,
 	'c|colored!'        => \$colored,
 	'j|joint!'          => \$joint,
@@ -484,13 +488,13 @@ sub set_ptrs
 		$rul_del = \&rul_del_flow;
 		$rul_change = \&rul_change_tc;
 		$rul_batch_start = sub {
-			if (!$verbose) {
+			unless ($verbose & $VERB_NOBATCH) {
 				batch_start_tc();
 				batch_start_ips();
 			}
 		};
 		$rul_batch_stop = sub {
-			if (!$verbose) {
+			unless ($verbose & $VERB_NOBATCH) {
 				batch_stop_tc();
 				batch_stop_ips();
 			}
@@ -511,8 +515,12 @@ sub set_ptrs
 		$rul_add = \&rul_add_u32;
 		$rul_del = \&rul_del_u32;
 		$rul_change = \&rul_change_tc;
-		$rul_batch_start = sub { batch_start_tc() if !$verbose; };
-		$rul_batch_stop = sub { batch_stop_tc() if !$verbose; };
+		$rul_batch_start = sub {
+			batch_start_tc() unless $verbose & $VERB_NOBATCH;
+		};
+		$rul_batch_stop = sub {
+			batch_stop_tc() unless $verbose & $VERB_NOBATCH;
+		};
 		$rul_load = \&rul_load_u32;
 		$rul_show = \&rul_show_u32;
 		$rul_reset = \&rul_reset_tc;
@@ -525,8 +533,12 @@ sub set_ptrs
 		$rul_add = \&rul_add_policer;
 		$rul_del = \&rul_del_policer;
 		$rul_change = \&rul_add_policer;
-		$rul_batch_start = sub { batch_start_tc() if !$verbose; };
-		$rul_batch_stop = sub { batch_stop_tc() if !$verbose; };
+		$rul_batch_start = sub {
+			batch_start_tc() unless $verbose & $VERB_NOBATCH;
+		};
+		$rul_batch_stop = sub {
+			batch_stop_tc() unless $verbose & $VERB_NOBATCH;
+		};
 		$rul_load = \&rul_load_policer;
 		$rul_show = \&rul_show_policer;
 		$rul_reset = \&rul_reset_policer;
@@ -1782,11 +1794,15 @@ sub cmd_sync
 	$rul_load->();
 	db_load();
 
+	unless ($verbose & $VERB_NOBATCH) {
+		batch_start_tc();
+		batch_start_ips() if $filter_method eq 'flow';
+	}
 	# delete rules for IPs that is not in database
 	foreach my $rcid (keys %rul_data) {
 		if (!defined $db_data{$rcid} && defined $rul_data{$rcid}) {
 			my $ip = $rul_data{$rcid}{'ip'};
-			print "- $ip\n" if $verbose;
+			print "- $ip\n" if $verbose & $VERB_ON;
 			$rul_del->($ip, $rcid);
 			$del++;
 		}
@@ -1795,7 +1811,7 @@ sub cmd_sync
 		# delete entries with zero rates
 		if ($db_data{$dcid}{'rate'} == 0) {
 			my $ip = $db_data{$dcid}{'ip'};
-			print "- $ip\n" if $verbose;
+			print "- $ip\n" if $verbose & $VERB_ON;
 			$rul_del->($ip, $dcid);
 			$del++;
 			next;
@@ -1804,7 +1820,7 @@ sub cmd_sync
 		# add new entries
 		if (!defined $rul_data{$dcid}) {
 			my $ip = $db_data{$dcid}{'ip'};
-			print "+ $ip\n" if $verbose;
+			print "+ $ip\n" if $verbose & $VERB_ON;
 			$rul_add->($ip, $dcid, $db_rate);
 			$add++;
 			next;
@@ -1813,13 +1829,18 @@ sub cmd_sync
 		my $rul_rate = $rul_data{$dcid}{'rate'};
 		if ($rul_rate ne $db_rate) {
 			my $ip = $db_data{$dcid}{'ip'};
-			print "* $ip $rul_rate -> $db_rate\n" if $verbose;
+			print "* $ip $rul_rate -> $db_rate\n" if $verbose & $VERB_ON;
 			$rul_change->($ip, $dcid, $db_rate);
 			$chg++;
 		}
 		else {
 			next;
 		}
+	}
+
+	unless ($verbose & $VERB_NOBATCH) {
+		batch_stop_tc();
+		batch_stop_ips() if $filter_method eq 'flow';
 	}
 	return ($add, $del, $chg);
 }
@@ -1888,7 +1909,7 @@ sub cmd_ver
 
 sub cmd_help
 {
-	if ($verbose) {
+	if ($verbose & $VERB_ON) {
 		pod2usage({ -exitstatus => 0, -verbose => 2 });
 	}
 	else {
@@ -2239,7 +2260,8 @@ ipset(8) batch modes, generate and show manpage using C<help> command.
 
 =item B<-q>, B<--quiet>
 
-Suppress output of error messages
+Suppress output of error messages from external command-line tools like tc(8),
+iptables(8) and ipset(8).
 
 =item B<-c>, B<--colored>
 

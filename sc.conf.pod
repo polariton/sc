@@ -90,7 +90,28 @@ print all command lines without execution.
 When enabled, turns on verbose messages and disables piping of tc(8) and
 ipset(8) rules.
 Default value: 0.
-Possible values: boolean.
+
+Possible values:
+
+=over
+
+=item B<0>
+
+no verbose messages (default)
+
+=item B<1>
+
+enable verbose messages (i.e. for results of `sync' command)
+
+=item B<2>
+
+disable usage of tc(8) and ipset(8) batch rule loading
+
+=item B<3>
+
+do B<1> + B<2>
+
+=back
 
 =item B<quiet>
 

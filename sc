@@ -2253,10 +2253,29 @@ print all command lines without execution.
 
 =back
 
-=item B<-v>, B<--verbose>
+=item B<-v>, B<--verbose> mode
 
-Enable additional output during execution, turn off usage of tc(8) and
-ipset(8) batch modes, generate and show manpage using C<help> command.
+Possible values:
+
+=over
+
+=item B<0>
+
+no verbose messages (default)
+
+=item B<1>
+
+enable verbose messages (i.e. for results of `sync' command)
+
+=item B<2>
+
+disable usage of tc(8) and ipset(8) batch rule loading
+
+=item B<3>
+
+do B<1> + B<2>
+
+=back
 
 =item B<-q>, B<--quiet>
 

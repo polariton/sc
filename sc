@@ -60,6 +60,7 @@ my $chain_name = 'FORWARD';
 my $policer_burst = '1500k';
 my $quantum = '1500';
 my $rate_unit = 'kibit';
+my $rate_ratio = 1.0;
 my $leaf_qdisc = 'pfifo limit 50';
 my $network = '172.16.0.0/16';
 my $filter_network = $network;
@@ -77,7 +78,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.2.0';
+my $VERSION = '1.2.1';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -271,6 +272,7 @@ my %optd = (
 	'policer_burst=s'   => \$policer_burst,
 	'quantum=s'         => \$quantum,
 	'u|rate_unit=s'     => \$rate_unit,
+	'r|rate_ratio=f'    => \$rate_ratio,
 	'leaf_qdisc=s'      => \$leaf_qdisc,
 	'chain=s'           => \$chain_name,
 	's|set_name=s'      => \$set_name,
@@ -423,7 +425,11 @@ sub main
 	$ret = $cmdd{$cmd}{'handler'}->(@argv);
 
 	# process return values
-	if ($ret == $E_NOTEXIST) {
+	if (!defined $ret) {
+		$ret = -1;
+		return $ret;
+	}
+	elsif ($ret == $E_NOTEXIST) {
 		log_carp("specified IP does not exist. Arguments: @argv");
 	}
 	elsif ($ret == $E_EXIST) {
@@ -1505,11 +1511,11 @@ sub rul_reset_ips
 	else {
 		$sys->(
 			"$iptables -D $chain_name -p all -m set --set $set_name src ".
-			"-j ACCEPT"
+			'-j ACCEPT'
 		);
 		$sys->(
 			"$iptables -D $chain_name -p all -m set --set $set_name dst ".
-			"-j ACCEPT"
+			'-j ACCEPT'
 		);
 	}
 	$sys->("$ipset --flush $set_name");
@@ -1775,7 +1781,7 @@ sub cmd_load
 	$ret = $rul_init->();
 	db_load();
 	foreach my $cid (keys %db_data) {
-		my $r = $db_data{$cid}{'rate'};
+		my $r = round($rate_ratio*$db_data{$cid}{'rate'});
 		$rul_add->($db_data{$cid}{'ip'}, $cid, "$r$rate_unit");
 	}
 	$rul_batch_stop->();
@@ -1816,7 +1822,8 @@ sub cmd_sync
 			$del++;
 			next;
 		}
-		my $db_rate = "$db_data{$dcid}{'rate'}$rate_unit";
+		my $db_rate = round($rate_ratio*$db_data{$dcid}{'rate'});
+		$db_rate .= "$rate_unit";
 		# add new entries
 		if (!defined $rul_data{$dcid}) {
 			my $ip = $db_data{$dcid}{'ip'};
@@ -1914,7 +1921,7 @@ sub cmd_help
 	}
 	else {
 		my $linewidth = 80;
-		my $indent = "\ \ \ \ ";
+		my $indent = '    ';
 
 		print "$VERSTR\n\n";
 		pod2usage({ -exitstatus => 'NOEXIT', -verbose => 99,
@@ -2079,7 +2086,8 @@ rates and almost forget about classid's, qdiscs, filters and other stuff.
 =item * Fast loading of large rulesets by using batch modes of tc(8) and
 ipset(8).
 
-=item * Effective classification with u32 hashing filters or flow classifier.
+=item * Effective classification with B<u32> hashing filters or B<flow>
+classifier.
 
 =item * Loading of IPs and rates from any relational database supported by
 Perl DBI module.
@@ -2122,7 +2130,7 @@ and ipset(8), B<flow> classifier (kernel version 2.6.25 or above, option
 B<CONFIG_NET_CLS_FLOW>=m or y), and B<ipset> kernel modules (see
 L<http://ipset.netfilter.org/> for details).
 
-If you prefer policing rather than shaping, you should enable the kernel
+If you prefer policing as a rate limiting method, you should enable the kernel
 option B<CONFIG_NET_ACT_POLICE>.
 
 
@@ -2170,7 +2178,7 @@ Delete rules
 =item B<help>
 
 Show help for commands, options and list available database drivers. Generate
-and show manpage if B<-v> option is specified.
+and show manpage if B<-v 1> option is specified.
 
 =item B<init>
 
@@ -2317,11 +2325,16 @@ turn.
 
 Default rate unit
 
+=item B<-r>, B<--rate_ratio> real number
+
+Ratio between bandwidth rates in rules and in the database.
+Used only for B<load> and B<sync> commands.
+
 =item B<-l>, B<--leaf_qdisc> string
 
 Leaf qdisc and parameters
 
-=item B<-c>, B<--chain> name
+=item B<--chain> name
 
 Name of iptables(8) chain to use
 
@@ -2470,8 +2483,10 @@ See sc.conf(5) for details.
 The error messages are printed to standard error.
 To print the command lines that return nonzero error codes, use B<-d 1>
 option.
-To print all command lines without execution, use B<-d 2>.
-To disable usage of batch modes of tc(8) and ipset(8), use B<-v> key.
+To print all generated command lines without execution, use B<-d 2> option.
+To disable the usage of the batch modes of tc(8) and ipset(8), use B<-v 2>
+option.
+For more information please read the section B<OPTIONS>.
 
 Program may return one of the following exit codes or the exit code of the
 failed command line that aborted the execution:

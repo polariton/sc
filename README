@@ -98,7 +98,7 @@ creates the cron(8) task which performs the synchronization of the rules every
 If you want to have rates that will differ from that stored in the database
 you should edit the rate_ratio in the sc.conf file with the suitable cron
 instruction. There is no need to reload the rules manually if you use the
-task for syncronization every 10 minutes from the example above.
+task for synchronization every 10 minutes from the example above.
 
 Examples of cron instructions for setting rate_ratio = 1.5 at 02:00 and
 changing it back to 1.0 at 07:00 every day:

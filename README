@@ -1,4 +1,4 @@
-Shaper Control Tool Readme
+Shaper Control Tool Readme File
 
 Download & update
 =================
@@ -11,8 +11,8 @@ Project page at BitBucket:
 
 Source code repositories:
   http://bitbucket.org/sky/sc/src/
-  http://sc-tool.hg.sourceforge.net/hgweb/sc-tool/
   http://mercurial.intuxication.org/hg/sc/
+  http://sc-tool.hg.sourceforge.net/hgweb/sc-tool/
 
 
 Installation
@@ -50,28 +50,27 @@ planning to use "flow" classifier.
 
 # make install
 
-SC comes with init script that is installed to location /etc/init.d/sc.
-
-To enable autostart of shaper you should create symlinks in runlevel
-directories. In Debian and related distributives you may use the following
-command
+SC comes with prepared init script that should be installed to location
+/etc/init.d/sc. To enable automatic start of the shaper script you should
+create appropriate symlinks in the runlevel directories. In Debian and related
+distributives you may use the following command:
 
 # update-rc.d sc defaults
 
 
-Configuration
-=============
+Configuration and usage
+=======================
 
 1. Database settings
 
 By default, sc stores it's data in SQLite database at /etc/sc/sc.db, but it
 can use any other DBI-compatible database server like MySQL, PostgreSQL or
 Oracle. If you plan to load the data from a remote database on a dedicated
-billing server, you must install corresponding Perl DBD module, configure
-database driver and SQL-queries that will produce correct output for sc.
-The first column must contain an IP-addresses in integer representation, and
-the second column provides the integer bandwith rate values (see default value
-of "query_create" parameter).
+server, you must install corresponding Perl DBD module, configure database
+driver and SQL-queries that will produce correct output for sc. The first
+column must contain an IP-addresses in integer representation, and the second
+column provides the integer bandwith rate values (see default value of
+"query_create" parameter).
 
 Rate units are defined by "rate_unit" parameter in sc.conf or by similar
 command line option. Default rate unit is 1 Kibit/s = 1024 bit/s.
@@ -89,20 +88,26 @@ random values of bandwidth rates.
 
 2. Synchronization of rules with database
 
-To perform synchronization of the shaping rules with the database you should
-add a corresponding line to your crontab file. The following example creates
-cron task which performs synchronization of rules every 10 minutes:
+To perform the synchronization of the shaping rules with the database entries
+you should edit your crontab file. The following example of crontab(5) entry
+creates the cron(8) task which performs the synchronization of the rules every
+10 minutes:
 
 */10 * * * * root /usr/local/sbin/sc sync
+
+If you want to have rates that will differ from that stored in the database
+you should edit the rate_ratio in the sc.conf file with the suitable cron
+instruction. There is no need to reload the rules manually if you use the
+task for syncronization every 10 minutes from the example above.
+
+Examples of cron instructions for setting rate_ratio = 1.5 at 02:00 and
+changing it back to 1.0 at 07:00 every day:
+
+0 2 * * * root sed -i 's/^rate_ratio.*=.*/rate_ratio = 1.5/g' /etc/sc/sc.conf
+0 7 * * * root sed -i 's/^rate_ratio.*=.*/rate_ratio = 1.0/g' /etc/sc/sc.conf
 
 3. Syslog
 
 SC can log errors and warnings through syslog. To enable this feature set
 "syslog" option to 1 in /etc/sc/sc.conf.
-
-Testing
-=======
-
-Source package includes "genbase" script that allows you to create database
-with IP-addresses and random bandwidth rates.
 

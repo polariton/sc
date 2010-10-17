@@ -1,11 +1,7 @@
 #=============================================================================
-#
 #         FILE:  sc.conf.pod
-#
 #  DESCRIPTION:  Source for sc.conf(5) manpage
-#
 #       AUTHOR:  Stanislav Kruchinin, <stanislav.krucinin@gmail.com>
-#
 #=============================================================================
 
 
@@ -15,7 +11,7 @@ B<sc.conf> - configuration file for sc(8).
 
 =head1 DESCRIPTION
 
-The sc.conf is parsed using C<AppConfig> module and has a simple C<variable =
+The F<sc.conf> is parsed using C<AppConfig> module and has a simple C<variable =
 value> form.
 Expansion for internal and environment variables is enabled (see AppConfig(3)
 for details).
@@ -47,11 +43,11 @@ Possible values:
 
 =item B<flow>
 
-use flow classifier and ipset(8) for access control.
+use B<flow> classifier and ipset(8) for access control.
 
 =item B<u32>
 
-use u32 hashing filters.
+use B<u32> hashing filters.
 
 =back
 
@@ -105,7 +101,7 @@ enable verbose messages (i.e. for results of `sync' command)
 
 =item B<2>
 
-disable usage of tc(8) and ipset(8) batch rule loading
+disable batch loading of rules for tc(8) and ipset(8)
 
 =item B<3>
 
@@ -184,6 +180,16 @@ Possible values: integer numbers >= MTU of the interface.
 Default rate unit.
 Default value: kibit.
 Possible values: see sc(8).
+
+=item B<rate_ratio>
+
+Ratio between bandwidth rates in rules and in the database.
+ rule_rate = db_rate * rate_ratio
+
+This coefficient is used only for B<load> and B<sync> commands.
+
+Default value: 1.0.
+Possible values: any rational number.
 
 =item B<leaf_qdisc>
 

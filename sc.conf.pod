@@ -48,6 +48,8 @@ use B<flow> classifier and ipset(8) for access control.
 =item B<u32>
 
 use B<u32> hashing filters.
+Warning: you can not use the IP's with zero last octet with this method due to
+limitations of tc(8) syntax.
 
 =back
 
@@ -55,8 +57,10 @@ use B<u32> hashing filters.
 
 Rate limiting method.
 Default value: shaping.
-Possible values: B<shaping> or B<policing>.
+Possible values: B<shaping>, B<policing>, B<hybrid>.
 Note, that B<policing> only works with B<u32> filtering method.
+B<Hybrid> method uses shaping for download and policing for upload, and all rules
+are created on the B<in_if> interface.
 
 =item B<debug>
 

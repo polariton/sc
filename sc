@@ -515,8 +515,8 @@ sub set_ptrs
 	}
 	elsif ($filter_method eq 'u32' && $limit_method eq 'shaping') {
 		$rul_init = sub {
-			rul_init_u32($o_if, 'src', 12);
-			rul_init_u32($i_if, 'dst', 16);
+			dev_init_u32($o_if, 'src', 12);
+			dev_init_u32($i_if, 'dst', 16);
 		};
 		$rul_add = \&rul_add_u32;
 		$rul_del = \&rul_del_u32;
@@ -533,8 +533,8 @@ sub set_ptrs
 	}
 	elsif ($filter_method eq 'u32' && $limit_method eq 'policing') {
 		$rul_init = sub {
-			rul_init_policer($o_if, 'dst', 16);
-			rul_init_policer($i_if, 'src', 12);
+			dev_init_policer($o_if, 'dst', 16);
+			dev_init_policer($i_if, 'src', 12);
 		};
 		$rul_add = \&rul_add_policer;
 		$rul_del = \&rul_del_policer;
@@ -859,6 +859,7 @@ sub db_connect
 			$db_user, $db_pass, { RaiseError => 1, AutoCommit => 1 }
 		);
 	}
+
 	return $dbh;
 }
 
@@ -892,75 +893,76 @@ sub rul_add_flow
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 
-	$TC->(
-		"class replace dev $o_if parent 1: classid 1:$cid ".
-		"htb rate $rate ceil $ceil quantum $quantum"
-	);
-	$TC->(
-		"class replace dev $i_if parent 1: classid 1:$cid ".
-		"htb rate $rate ceil $ceil quantum $quantum"
-	);
-
-	$TC->(
-		"qdisc replace dev $o_if parent 1:$cid handle $cid:0 $leaf_qdisc"
-	);
-	$TC->(
-		"qdisc replace dev $i_if parent 1:$cid handle $cid:0 $leaf_qdisc"
-	);
-
+	iface_add_flow($i_if, $cid, $rate, $ceil);
+	iface_add_flow($o_if, $cid, $rate, $ceil);
 	$IPS->("-A $set_name $ip");
 
+	return $?;
+}
+
+sub dev_add_flow
+{
+	my ($dev, $cid, $rate, $ceil) = @_;
+
+	$TC->(
+		"class replace dev $dev parent 1: classid 1:$cid ".
+		"htb rate $rate ceil $ceil quantum $quantum"
+	);
+	$TC->(
+		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
+	);
 	return $?;
 }
 
 sub rul_add_u32
 {
 	my ($ip, $cid, $rate) = @_;
-	my ($ht, $key) = ip_leafht_key($ip);
 	my $ceil = $rate;
+	my ($ht, $key) = ip_leafht_key($ip);
+
+	dev_add_u32($i_if, $ip, $cid, $rate, $ceil, 'ip dst', $ht, $key);
+	dev_add_u32($o_if, $ip, $cid, $rate, $ceil, 'ip src', $ht, $key);
+
+	return $?;
+}
+
+sub dev_add_u32
+{
+	my ($dev, $ip, $cid, $rate, $ceil, $match, $ht, $key) = @_;
 
 	$TC->(
-		"class replace dev $o_if parent 1: classid 1:$cid ".
+		"class replace dev $dev parent 1: classid 1:$cid ".
 		"htb rate $rate ceil $ceil quantum $quantum"
 	);
 	$TC->(
-		"qdisc replace dev $o_if parent 1:$cid handle $cid:0 $leaf_qdisc"
+		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
 	$TC->(
-		"filter replace dev $o_if parent 1: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match ip src $ip flowid 1:$cid"
+		"filter replace dev $dev parent 1: pref $pref_leaf ".
+		"handle $ht:$key u32 ht $ht:$key: match $match $ip flowid 1:$cid"
 	);
-
-	$TC->(
-		"class replace dev $i_if parent 1: classid 1:$cid ".
-		"htb rate $rate ceil $ceil quantum $quantum"
-	);
-	$TC->(
-		"qdisc replace dev $i_if parent 1:$cid handle $cid:0 $leaf_qdisc"
-	);
-	$TC->(
-		"filter replace dev $i_if parent 1: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match ip dst $ip flowid 1:$cid"
-	);
-
 	return $?;
 }
 
 sub rul_add_policer
 {
 	my ($ip, $cid, $rate) = @_;
-	my ($ht, $key) = ip_leafht_key($ip);
 	my $ceil = $rate;
+	my ($ht, $key) = ip_leafht_key($ip);
+
+	dev_add_policer($i_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key);
+	dev_add_policer($o_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+
+	return $?;
+}
+
+sub dev_add_policer
+{
+	my ($dev, $cid, $rate, $ceil, $match, $ht, $key) = @_;
 
 	$TC->(
-		"filter replace dev $o_if parent ffff: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match ip dst $ip ".
-		"police rate $rate burst $policer_burst drop flowid ffff:"
-	);
-
-	$TC->(
-		"filter replace dev $i_if parent ffff: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match ip src $ip ".
+		"filter replace dev $dev parent ffff: pref $pref_leaf ".
+		"handle $ht:$key u32 ht $ht:$key: match $match ".
 		"police rate $rate burst $policer_burst drop flowid ffff:"
 	);
 
@@ -972,12 +974,18 @@ sub rul_del_flow
 	my ($ip, $cid) = @_;
 
 	$IPS->("-D $set_name $ip");
+	dev_del_flow($i_if, $cid);
+	dev_del_flow($o_if, $cid);
 
-	$TC->("qdisc del dev $o_if parent 1:$cid handle $cid:0");
-	$TC->("class del dev $o_if parent 1: classid 1:$cid");
+	return $?;
+}
 
-	$TC->("qdisc del dev $i_if parent 1:$cid handle $cid:0");
-	$TC->("class del dev $i_if parent 1: classid 1:$cid");
+sub dev_del_flow
+{
+	my ($dev, $cid) = @_;
+
+	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
+	$TC->("class del dev $dev parent 1: classid 1:$cid");
 
 	return $?;
 }
@@ -987,21 +995,24 @@ sub rul_del_u32
 	my ($ip, $cid) = @_;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	$TC->(
-		"filter del dev $o_if parent 1: pref $pref_hash ".
-		"handle $ht:$key u32"
-	);
-	$TC->("qdisc del dev $o_if parent 1:$cid handle $cid:0");
-	$TC->("class del dev $o_if parent 1: classid 1:$cid");
-
-	$TC->(
-		"filter del dev $i_if parent 1: pref $pref_hash ".
-		"handle $ht:$key u32"
-	);
-	$TC->("qdisc del dev $i_if parent 1:$cid handle $cid:0");
-	$TC->("class del dev $i_if parent 1: classid 1:$cid");
+	dev_del_u32($i_if, $cid, $ht, $key);
+	dev_del_u32($o_if, $cid, $ht, $key);
 
 	return $?
+}
+
+sub dev_del_u32
+{
+	my ($dev, $cid, $ht, $key) = @_;
+
+	$TC->(
+		"filter del dev $dev parent 1: pref $pref_hash ".
+		"handle $ht:$key u32"
+	);
+	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
+	$TC->("class del dev $dev parent 1: classid 1:$cid");
+
+	return $?;
 }
 
 sub rul_del_policer
@@ -1009,17 +1020,22 @@ sub rul_del_policer
 	my ($ip, $cid) = @_;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	$TC->(
-		"filter del dev $o_if parent ffff: pref $pref_hash ".
-		"handle $ht:$key u32"
-	);
-
-	$TC->(
-		"filter del dev $i_if parent ffff: pref $pref_hash ".
-		"handle $ht:$key u32"
-	);
+	dev_del_policer($i_if, $ht, $key);
+	dev_del_policer($o_if, $ht, $key);
 
 	return $?
+}
+
+sub dev_del_policer
+{
+	my ($dev, $ht, $key) = @_;
+
+	$TC->(
+		"filter del dev $dev parent ffff: pref $pref_hash ".
+		"handle $ht:$key u32"
+	);
+
+	return $?;
 }
 
 sub rul_change_tc
@@ -1027,18 +1043,25 @@ sub rul_change_tc
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 
+	dev_change_tc($i_if, $cid, $rate, $ceil);
+	dev_change_tc($o_if, $cid, $rate, $ceil);
+
+	return $?;
+}
+
+sub dev_change_tc
+{
+	my ($dev, $cid, $rate, $ceil) = @_;
+
 	$TC->(
-		"class change dev $o_if parent 1:0 classid 1:$cid htb ".
-		"rate $rate ceil $ceil quantum $quantum"
-	);
-	$TC->(
-		"class change dev $i_if parent 1:0 classid 1:$cid htb ".
+		"class change dev $dev parent 1:0 classid 1:$cid htb ".
 		"rate $rate ceil $ceil quantum $quantum"
 	);
 
 	return $?;
 }
 
+# Get the list of IPs, classids and rates from the actual rules
 sub rul_load_flow
 {
 	my ($ip, $cid, $rate);
@@ -1082,7 +1105,7 @@ sub rul_load_u32
 	my ($ip, $cid, $rate);
 	my $ret = $E_OK;
 
-	open my $TCFH, '-|', "$tc -p filter show dev $i_if"
+	open my $TCFH, '-|', "$tc -p -iec filter show dev $i_if"
 		or log_croak("unable to open pipe for $tc");
 	my @tcout = <$TCFH>;
 	close $TCFH or log_carp("unable to close pipe for $tc");
@@ -1131,34 +1154,13 @@ sub rul_load_policer
 		}
 	}
 
-	open my $TCCH, '-|', "$tc class show dev $i_if"
-		or log_croak("unable to open pipe for $tc");
-	@tcout = <$TCCH>;
-	close $TCCH or log_carp("unable to close pipe for $tc");
-	foreach (@tcout) {
-		if (($cid, $rate) = /leaf\ ([0-9a-f]+):\ .*\ rate\ (\w+)/xms) {
-			next if !defined $rul_data{$cid};
-			$rate = rate_cvt($rate, $rate_unit);
-			$rul_data{$cid}{'rate'} = $rate;
-		}
-	}
-
 	return $ret;
 }
 
 sub rul_init_flow
 {
-	$TC->("qdisc add dev $o_if root handle 1: htb");
-	$TC->(
-		"filter add dev $o_if parent 1:0 protocol ip pref $pref_hash ".
-		"handle 1 flow map key src and 0xffff"
-	);
-
-	$TC->("qdisc add dev $i_if root handle 1: htb");
-	$TC->(
-		"filter add dev $i_if parent 1:0 protocol ip pref $pref_hash ".
-		"handle 1 flow map key dst and 0xffff"
-	);
+	dev_init_flow($i_if);
+	dev_init_flow($o_if);
 
 	if ($set_type eq 'ipmap') {
 		$IPS->("-N $set_name $set_type --network $network");
@@ -1169,6 +1171,19 @@ sub rul_init_flow
 	else {
 		log_croak("unknown set type \'$set_type\' specified");
 	}
+
+	return $?;
+}
+
+sub dev_init_flow
+{
+	my ($dev) = @_;
+
+	$TC->("qdisc add dev $dev root handle 1: htb");
+	$TC->(
+		"filter add dev $dev parent 1:0 protocol ip pref $pref_hash ".
+		"handle 1 flow map key src and 0xffff"
+	);
 
 	return $?;
 }
@@ -1190,7 +1205,7 @@ sub rul_init_ipt
 	return $?;
 }
 
-sub rul_init_u32
+sub dev_init_u32
 {
 	my ($dev, $match, $offset) = @_;
 
@@ -1262,7 +1277,7 @@ sub rul_init_u32
 	return $?;
 }
 
-sub rul_init_policer
+sub dev_init_policer
 {
 	my ($dev, $match, $offset) = @_;
 

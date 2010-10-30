@@ -495,10 +495,6 @@ sub set_ptrs
 	}
 
 	if ($filter_method eq 'flow') {
-		$rul_init = \&rul_init_flow;
-		$rul_add = \&rul_add_flow;
-		$rul_del = \&rul_del_flow;
-		$rul_change = \&rul_change_tc;
 		$rul_batch_start = sub {
 			unless ($verbose & VERB_NOBATCH) {
 				batch_start_tc();
@@ -512,6 +508,10 @@ sub set_ptrs
 			}
 			rul_init_ipt();
 		};
+		$rul_init = \&rul_init_flow;
+		$rul_add = \&rul_add_flow;
+		$rul_del = \&rul_del_flow;
+		$rul_change = \&rul_change_tc;
 		$rul_load = \&rul_load_flow;
 		$rul_show = \&rul_show_flow;
 		$rul_reset = sub {
@@ -519,55 +519,65 @@ sub set_ptrs
 			rul_reset_tc();
 		};
 	}
-	elsif ($filter_method eq 'u32' && $limit_method eq 'shaping') {
-		$rul_init = sub {
-			dev_init_u32($o_if, 'src', 12);
-			dev_init_u32($i_if, 'dst', 16);
-		};
-		$rul_add = \&rul_add_u32;
-		$rul_del = \&rul_del_u32;
-		$rul_change = \&rul_change_tc;
+	elsif ($filter_method eq 'u32') {
 		$rul_batch_start = sub {
 			batch_start_tc() unless $verbose & VERB_NOBATCH;
 		};
 		$rul_batch_stop = sub {
 			batch_stop_tc() unless $verbose & VERB_NOBATCH;
 		};
-		$rul_load = \&rul_load_u32;
-		$rul_show = \&rul_show_u32;
-		$rul_reset = \&rul_reset_tc;
-	}
-	elsif ($filter_method eq 'u32' && $limit_method eq 'policing') {
-		$rul_init = sub {
-			dev_init_policer($o_if, 'dst', 16);
-			dev_init_policer($i_if, 'src', 12);
-		};
-		$rul_add = \&rul_add_policer;
-		$rul_del = \&rul_del_policer;
-		$rul_change = \&rul_add_policer;
-		$rul_batch_start = sub {
-			batch_start_tc() unless $verbose & VERB_NOBATCH;
-		};
-		$rul_batch_stop = sub {
-			batch_stop_tc() unless $verbose & VERB_NOBATCH;
-		};
-		$rul_load = \&rul_load_policer;
-		$rul_show = \&rul_show_policer;
-		$rul_reset = \&rul_reset_policer;
-	}
-	elsif ($limit_method eq 'policing' && $filter_method ne 'u32') {
-		log_croak(
-			'Policing can be used only when filter_method = u32'
-		);
-	}
-	elsif ($limit_method ne 'policing' || $limit_method ne 'shaping') {
-		log_croak(
-			"\'$limit_method\' is invalid value for limit_method parameter"
-		);
+
+		if ($limit_method eq 'shaping') {
+			$rul_init = sub {
+				dev_init_u32($o_if, 'src', 12);
+				dev_init_u32($i_if, 'dst', 16);
+			};
+			$rul_add = \&rul_add_u32;
+			$rul_del = \&rul_del_u32;
+			$rul_change = \&rul_change_tc;
+			$rul_load = \&rul_load_u32;
+			$rul_show = \&rul_show_u32;
+			$rul_reset = \&rul_reset_tc;
+		}
+		elsif ($limit_method eq 'policing') {
+			$rul_init = sub {
+				dev_init_policer($o_if, 'dst', 16);
+				dev_init_policer($i_if, 'src', 12);
+			};
+			$rul_add = \&rul_add_policer;
+			$rul_del = \&rul_del_policer;
+			$rul_change = \&rul_add_policer;
+			$rul_load = \&rul_load_policer;
+			$rul_show = \&rul_show_policer;
+			$rul_reset = \&rul_reset_policer;
+		}
+		elsif ($limit_method eq 'hybrid') {
+			$rul_init = sub {
+				dev_init_policer($i_if, 'src', 12);
+				dev_init_u32($i_if, 'dst', 16);
+			};
+			$rul_add = \&rul_add_hybrid;
+			$rul_del = \&rul_del_hybrid;
+			$rul_change = \&rul_change_hybrid;
+			$rul_load = \&rul_load_policer;
+			$rul_show = \&rul_show_hybrid;
+			$rul_reset = \&rul_reset_hybrid;
+		}
+		else {
+			log_croak(
+				"\'$limit_method\' is invalid value for limit_method"
+			);
+		}
 	}
 	else {
+		if ($limit_method eq 'policing') {
+			log_croak(
+				'Policing can be used only when filter_method = u32'
+			);
+			return;
+		}
 		log_croak(
-			"\'$filter_method\' is invalid value for filter_method parameter"
+			"\'$filter_method\' is invalid value for filter_method"
 		);
 	}
 	return;
@@ -926,15 +936,15 @@ sub rul_add_u32
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	dev_add_u32($i_if, $ip, $cid, $rate, $ceil, 'ip dst', $ht, $key);
-	dev_add_u32($o_if, $ip, $cid, $rate, $ceil, 'ip src', $ht, $key);
+	dev_add_u32($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+	dev_add_u32($o_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key);
 
 	return $?;
 }
 
 sub dev_add_u32
 {
-	my ($dev, $ip, $cid, $rate, $ceil, $match, $ht, $key) = @_;
+	my ($dev, $cid, $rate, $ceil, $match, $ht, $key) = @_;
 
 	$TC->(
 		"class replace dev $dev parent 1: classid 1:$cid ".
@@ -945,7 +955,7 @@ sub dev_add_u32
 	);
 	$TC->(
 		"filter replace dev $dev parent 1: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match $match $ip flowid 1:$cid"
+		"handle $ht:$key u32 ht $ht:$key: match $match flowid 1:$cid"
 	);
 	return $?;
 }
@@ -956,21 +966,33 @@ sub rul_add_policer
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	dev_add_policer($i_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key);
-	dev_add_policer($o_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+	dev_add_policer($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
+	dev_add_policer($o_if, $rate, $ceil, "ip dst $ip", $ht, $key);
 
 	return $?;
 }
 
 sub dev_add_policer
 {
-	my ($dev, $cid, $rate, $ceil, $match, $ht, $key) = @_;
+	my ($dev, $rate, $ceil, $match, $ht, $key) = @_;
 
 	$TC->(
 		"filter replace dev $dev parent ffff: pref $pref_leaf ".
 		"handle $ht:$key u32 ht $ht:$key: match $match ".
 		"police rate $rate burst $policer_burst drop flowid ffff:"
 	);
+
+	return $?;
+}
+
+sub rul_add_hybrid
+{
+	my ($ip, $cid, $rate) = @_;
+	my $ceil = $rate;
+	my ($ht, $key) = ip_leafht_key($ip);
+
+	dev_add_policer($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
+	dev_add_u32($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
 
 	return $?;
 }
@@ -1044,6 +1066,17 @@ sub dev_del_policer
 	return $?;
 }
 
+sub rul_del_hybrid
+{
+	my ($ip, $cid) = @_;
+	my ($ht, $key) = ip_leafht_key($ip);
+
+	dev_del_policer($i_if, $ht, $key);
+	dev_del_u32($i_if, $cid, $ht, $key);
+
+	return $?
+}
+
 sub rul_change_tc
 {
 	my ($ip, $cid, $rate) = @_;
@@ -1065,6 +1098,16 @@ sub dev_change_tc
 	);
 
 	return $?;
+}
+
+sub rul_change_hybrid
+{
+	my ($ip, $cid, $rate) = @_;
+	my $ceil = $rate;
+	my ($ht, $key) = ip_leafht_key($ip);
+
+	dev_add_policer($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
+	dev_change_tc($i_if, $cid, $rate, $ceil);
 }
 
 # Get the list of IPs, classids and rates from the actual rules
@@ -1513,10 +1556,82 @@ sub rul_show_policer
 		}
 	}
 	else {
-		print BOLD, "POLICYING FILTERS [$i_if]:\n", RESET;
+		print BOLD, "POLICING FILTERS [$i_if]:\n", RESET;
 		system "$tc -p -s filter show dev $i_if parent ffff:";
-		print BOLD, "POLICYING FILTERS [$o_if]:\n", RESET;
+		print BOLD, "POLICING FILTERS [$o_if]:\n", RESET;
 		system "$tc -p -s filter show dev $o_if parent ffff:";
+		return $?;
+	}
+	return $?;
+}
+
+sub rul_show_hybrid
+{
+	my @ips = @_;
+
+	if (nonempty($ips[0])) {
+		foreach my $ip (@ips) {
+			arg_check(\&is_ip, $ip, 'IP');
+			my $cid;
+			my @tcout;
+
+			open my $TCFH, '-|',
+				"$tc -p -s -iec filter show dev $i_if parent ffff:"
+				or log_croak("unable to open pipe for $tc");
+			@tcout = <$TCFH>;
+			close $TCFH or log_carp("unable to close pipe for $tc");
+			for my $i (0 .. $#tcout) {
+				chomp $tcout[$i];
+				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+					print BOLD, "Policing filter [$i_if]:\n", RESET;
+					for my $j ($i-1 .. $i+1) {
+						print "$tcout[$j]";
+					}
+					last;
+				}
+			}
+
+			open $TCFH, '-|', "$tc -p -s filter show dev $i_if"
+				or log_croak("unable to open pipe for $tc");
+			@tcout = <$TCFH>;
+			close $TCFH or log_carp("unable to close pipe for $tc");
+			for my $i (0 .. $#tcout) {
+				chomp $tcout[$i];
+				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+					if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
+						print BOLD, "Input filter [$i_if]:\n", RESET;
+						print "$tcout[$i-1]\n$tcout[$i]\n";
+						print_rules(
+							"\nShaping filter [$i_if]:",
+							"$tc -p -s filter show dev $i_if | ".
+							"grep -F -w -B 1 \"match IP dst $ip/32\""
+						);
+						print_rules(
+							"\nShaping class [$i_if]:",
+							"$tc -i -s -d class show dev $i_if | ".
+							"grep -F -w -A 3 \"leaf $cid\:\""
+						);
+						print_rules(
+							"\nShaping qdisc [$i_if]:",
+							"$tc -i -s -d qdisc show dev $i_if | ".
+							"grep -F -w -A 2 \"$cid\: parent 1:$cid\""
+						);
+						print "\n";
+						last;
+					}
+				}
+			}
+		}
+	}
+	else {
+		print BOLD, "POLICING FILTERS [$i_if]:\n", RESET;
+		system "$tc -p -s filter show dev $i_if parent ffff:";
+		print BOLD, "SHAPING FILTERS [$i_if]:\n", RESET;
+		system "$tc -p -s filter show dev $i_if";
+		print BOLD, "\nSHAPING CLASSES [$i_if]:\n", RESET;
+		system "$tc -i -s -d class show dev $i_if";
+		print BOLD, "\nSHAPING QDISCS [$i_if]:\n", RESET;
+		system "$tc -i -s -d qdisc show dev $i_if";
 		return $?;
 	}
 	return $?;
@@ -1556,6 +1671,12 @@ sub rul_reset_policer
 	$sys->("$tc qdisc del dev $o_if handle ffff: ingress");
 	$sys->("$tc qdisc del dev $i_if handle ffff: ingress");
 	return $?;
+}
+
+sub rul_reset_hybrid
+{
+	$sys->("$tc qdisc del dev $i_if handle ffff: ingress");
+	$sys->("$tc qdisc del dev $i_if root handle 1: htb");
 }
 
 sub print_rules
@@ -2107,15 +2228,18 @@ rates and almost forget about classid's, qdiscs, filters and other stuff.
 =item * Fast loading of large rulesets by using batch modes of tc(8) and
 ipset(8).
 
-=item * Effective classification with B<u32> hashing filters or B<flow>
-classifier.
+=item * Effective traffic classification with B<u32> hashing filters or
+B<flow> classifier.
 
-=item * Loading of IPs and rates from any relational database supported by
-Perl DBI module.
+=item * Loading of data from any relational database supported by Perl DBI
+module.
 
 =item * Synchronization of rules with database.
 
 =item * Batch command execution mode for scripting purposes.
+
+=item * Support of different traffic limiting methods: shaping, policing, and
+hybrid.
 
 =back
 

@@ -21,15 +21,19 @@ my $iptables = '/sbin/iptables';
 my $tc = '/sbin/tc';
 my $ipset = '/usr/local/sbin/ipset';
 
-my $DEBUG_OFF   = 0; # no debug output
-my $DEBUG_ON    = 1; # print command line that caused error
-my $DEBUG_PRINT = 2; # print all commands instead of executing them
-my $debug = $DEBUG_OFF;
+use constant {
+	DEBUG_OFF   => 0, # no debug output
+	DEBUG_ON    => 1, # print command line that caused error
+	DEBUG_PRINT => 2, # print all commands instead of executing them
+};
+my $debug = DEBUG_OFF;
 
-my $VERB_OFF = 0; # no verbose messages
-my $VERB_ON = 1; # enable messages
-my $VERB_NOBATCH = 2; # disable batch modes of tc and ipset
-my $verbose = 0;
+use constant {
+	VERB_OFF => 0,     # no verbose messages
+	VERB_ON => 1,      # enable messages
+	VERB_NOBATCH => 2, # disable batch modes of tc and ipset
+};
+my $verbose = VERB_OFF;
 
 my $quiet = 0;
 my $colored = 1;
@@ -229,17 +233,19 @@ my %units = (
 );
 
 # Error codes
-my $E_OK       = 0;
-my $E_PARAM    = 1;
-my $E_IP_COLL  = 2;
-my $E_UNDEF    = 3;
-my $E_EXIST    = 4;
-my $E_NOTEXIST = 5;
-my $E_CMD      = 6;
-my $E_PRIV     = 7;
+use constant {
+	E_OK       => 0,
+	E_PARAM    => 1,
+	E_IP_COLL  => 2,
+	E_UNDEF    => 3,
+	E_EXIST    => 4,
+	E_NOTEXIST => 5,
+	E_CMD      => 6,
+	E_PRIV     => 7,
+};
 
 # global return value
-my $RET = $E_OK;
+my $RET = E_OK;
 
 # Preamble for usage and help message
 my $usage_preamble = <<"EOF"
@@ -338,7 +344,7 @@ else {
 }
 
 # get options from command line
-GetOptions(%optd) or exit $E_PARAM;
+GetOptions(%optd) or exit E_PARAM;
 
 # command queue for batch mode
 my @queue;
@@ -398,20 +404,20 @@ sub acomp_cmd
 sub main
 {
 	my @argv = @_;
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	# process command line
 	if ($batch) {
-		GetOptionsFromArray(\@argv, %optd) or return $E_PARAM;
+		GetOptionsFromArray(\@argv, %optd) or return E_PARAM;
 	}
-	usage($E_CMD) if !defined $argv[0];
+	usage(E_CMD) if !defined $argv[0];
 	my $cmd = acomp_cmd($argv[0]);
-	usage($E_CMD) if !defined $cmd;
-	return $E_CMD if $cmd eq q{};
+	usage(E_CMD) if !defined $cmd;
+	return E_CMD if $cmd eq q{};
 
 	if ($cmdd{$cmd}{'priv'} && !$debug && $>) {
 		log_warn('you must run this command with root privileges');
-		return $E_PRIV;
+		return E_PRIV;
 	}
 
 	# prepare all settings
@@ -429,22 +435,22 @@ sub main
 		$ret = -1;
 		return $ret;
 	}
-	elsif ($ret == $E_NOTEXIST) {
+	elsif ($ret == E_NOTEXIST) {
 		log_carp("specified IP does not exist. Arguments: @argv");
 	}
-	elsif ($ret == $E_EXIST) {
+	elsif ($ret == E_EXIST) {
 		log_carp("specified IP already exists. Arguments: @argv");
 	}
 
 	if ($joint && defined $cmdd{$cmd}{'dbhandler'}) {
 		$ret = $cmdd{$cmd}{'dbhandler'}->(@argv);
-		if ($ret == $E_NOTEXIST) {
+		if ($ret == E_NOTEXIST) {
 			log_carp(
 				'database entry for specified IP does not exist. '.
 				"Arguments: @argv"
 			);
 		}
-		elsif ($ret == $E_EXIST) {
+		elsif ($ret == E_EXIST) {
 			log_carp(
 				'database entry for specified IP already exists. '.
 				"Arguments: @argv"
@@ -478,13 +484,13 @@ sub sys_debug_on
 # set function pointers
 sub set_ptrs
 {
-	if ($debug == $DEBUG_OFF) {
+	if ($debug == DEBUG_OFF) {
 		$sys = ($quiet) ? \&sys_quiet : sub { return system @_ };
 	}
-	elsif ($debug == $DEBUG_ON) {
+	elsif ($debug == DEBUG_ON) {
 		$sys = \&sys_debug_on;
 	}
-	elsif ($debug == $DEBUG_PRINT) {
+	elsif ($debug == DEBUG_PRINT) {
 		$sys = \&sys_debug_print;
 	}
 
@@ -494,13 +500,13 @@ sub set_ptrs
 		$rul_del = \&rul_del_flow;
 		$rul_change = \&rul_change_tc;
 		$rul_batch_start = sub {
-			unless ($verbose & $VERB_NOBATCH) {
+			unless ($verbose & VERB_NOBATCH) {
 				batch_start_tc();
 				batch_start_ips();
 			}
 		};
 		$rul_batch_stop = sub {
-			unless ($verbose & $VERB_NOBATCH) {
+			unless ($verbose & VERB_NOBATCH) {
 				batch_stop_tc();
 				batch_stop_ips();
 			}
@@ -522,10 +528,10 @@ sub set_ptrs
 		$rul_del = \&rul_del_u32;
 		$rul_change = \&rul_change_tc;
 		$rul_batch_start = sub {
-			batch_start_tc() unless $verbose & $VERB_NOBATCH;
+			batch_start_tc() unless $verbose & VERB_NOBATCH;
 		};
 		$rul_batch_stop = sub {
-			batch_stop_tc() unless $verbose & $VERB_NOBATCH;
+			batch_stop_tc() unless $verbose & VERB_NOBATCH;
 		};
 		$rul_load = \&rul_load_u32;
 		$rul_show = \&rul_show_u32;
@@ -540,10 +546,10 @@ sub set_ptrs
 		$rul_del = \&rul_del_policer;
 		$rul_change = \&rul_add_policer;
 		$rul_batch_start = sub {
-			batch_start_tc() unless $verbose & $VERB_NOBATCH;
+			batch_start_tc() unless $verbose & VERB_NOBATCH;
 		};
 		$rul_batch_stop = sub {
-			batch_stop_tc() unless $verbose & $VERB_NOBATCH;
+			batch_stop_tc() unless $verbose & VERB_NOBATCH;
 		};
 		$rul_load = \&rul_load_policer;
 		$rul_show = \&rul_show_policer;
@@ -571,7 +577,7 @@ sub set_ptrs
 sub set_filter_nets {
 	# I restrict this value to a 0x799 to avoid discontinuity of filter space.
 	# Real maximum number of u32 hash tables is 0xfff.
-	my $ht_max = 1945;
+	my $ht_max = 0x799;
 
 	# Initial numbers for hash tables of 1st and 2nd nesting levels
 	#
@@ -617,7 +623,7 @@ sub set_filter_nets {
 sub set_class_nets
 {
 	my $cid_min = 2;
-	my $cid_max = 65_535;
+	my $cid_max = 0xFFFF;
 	my $cid_i = $cid_min;
 
 	foreach my $n (split /\ /ixms, $network) {
@@ -743,7 +749,7 @@ sub ip_leafht_key
 			# 3rd octet
 			my $ht_offset = ($intip & $filter_nets{$n}{'invmask'}) >> 8;
 			# 4th octet
-			$key = sprintf '%x', $intip & 0xff;
+			$key = sprintf '%x', $intip & 0xFF;
 			$leafht = sprintf '%x', $filter_nets{$n}{'leafht_i'} + $ht_offset;
 			last;
 		}
@@ -765,7 +771,7 @@ sub div_hmask_u32
 
 	log_croak("$n is invalid number of octet") if $n < 1 || $n > 4;
 	# get n-th byte from netmask
-	my $inthmask = (2**(32 - $netmask) - 1) & (0xff << 8*(4-$n));
+	my $inthmask = (2**(32 - $netmask) - 1) & (0xFF << 8*(4-$n));
 	my $hmask = sprintf '0x%08x', $inthmask;
 	my $div = ($inthmask >> 8*(4-$n)) + 1;
 
@@ -1065,7 +1071,7 @@ sub dev_change_tc
 sub rul_load_flow
 {
 	my ($ip, $cid, $rate);
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	open my $IPH, '-|', "$ipset -nsL $set_name" or
 		log_croak("unable to open pipe for $ipset");
@@ -1079,7 +1085,7 @@ sub rul_load_flow
 		if (defined $rul_data{$cid}{'ip'}) {
 			log_carp('IP-to-classid collision detected, skipping. OLD: '.
 				$rul_data{$cid}{'ip'}.", NEW: $ip");
-			$ret = $E_IP_COLL;
+			$ret = E_IP_COLL;
 			next;
 		}
 		$rul_data{$cid}{'ip'} = $ip;
@@ -1103,7 +1109,7 @@ sub rul_load_flow
 sub rul_load_u32
 {
 	my ($ip, $cid, $rate);
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	open my $TCFH, '-|', "$tc -p -iec filter show dev $i_if"
 		or log_croak("unable to open pipe for $tc");
@@ -1136,7 +1142,7 @@ sub rul_load_u32
 sub rul_load_policer
 {
 	my ($ip, $cid, $rate);
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	open my $TCFH, '-|', "$tc -p -iec filter show dev $i_if parent ffff:"
 		or log_croak("unable to open pipe for $tc");
@@ -1271,7 +1277,7 @@ sub dev_init_u32
 	# block all other traffic
 	$TC->(
 		"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
-		'u32 match u32 0x0 0x0 at 0 police mtu 1 action drop'
+		'u32 match u32 0 0 at 0 police mtu 1 action drop'
 	);
 
 	return $?;
@@ -1343,7 +1349,7 @@ sub dev_init_policer
 	# block all other traffic
 	$TC->(
 		"filter add dev $dev parent ffff:0 protocol ip pref $pref_default ".
-		'u32 match u32 0x0 0x0 at 0 police mtu 1 action drop'
+		'u32 match u32 0 0 at 0 police mtu 1 action drop'
 	);
 
 	return $?;
@@ -1664,7 +1670,7 @@ sub batch_tc
 
 sub batch_start_tc
 {
-	if ($debug == $DEBUG_PRINT) {
+	if ($debug == DEBUG_PRINT) {
 		open $TC_H, '>', 'tc.batch'
 			or log_croak('unable to open tc.batch');
 	}
@@ -1696,7 +1702,7 @@ sub batch_ips
 
 sub batch_start_ips
 {
-	if ($debug == $DEBUG_PRINT) {
+	if ($debug == DEBUG_PRINT) {
 		open $IPS_H, '>', 'ipset.batch'
 			or log_croak('unable to open ipset.batch');
 	}
@@ -1722,7 +1728,7 @@ sub batch_stop_ips
 
 sub cmd_init
 {
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	$rul_batch_start->();
 	$ret = $rul_init->();
@@ -1790,7 +1796,7 @@ sub cmd_list
 
 sub cmd_load
 {
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	$rul_batch_start->();
 	$ret = $rul_init->();
@@ -1815,7 +1821,7 @@ sub cmd_sync
 	$rul_load->();
 	db_load();
 
-	unless ($verbose & $VERB_NOBATCH) {
+	unless ($verbose & VERB_NOBATCH) {
 		batch_start_tc();
 		batch_start_ips() if $filter_method eq 'flow';
 	}
@@ -1823,7 +1829,7 @@ sub cmd_sync
 	foreach my $rcid (keys %rul_data) {
 		if (!defined $db_data{$rcid} && defined $rul_data{$rcid}) {
 			my $ip = $rul_data{$rcid}{'ip'};
-			print "- $ip\n" if $verbose & $VERB_ON;
+			print "- $ip\n" if $verbose & VERB_ON;
 			$rul_del->($ip, $rcid);
 			$del++;
 		}
@@ -1832,7 +1838,7 @@ sub cmd_sync
 		# delete entries with zero rates
 		if ($db_data{$dcid}{'rate'} == 0) {
 			my $ip = $db_data{$dcid}{'ip'};
-			print "- $ip\n" if $verbose & $VERB_ON;
+			print "- $ip\n" if $verbose & VERB_ON;
 			$rul_del->($ip, $dcid);
 			$del++;
 			next;
@@ -1842,7 +1848,7 @@ sub cmd_sync
 		# add new entries
 		if (!defined $rul_data{$dcid}) {
 			my $ip = $db_data{$dcid}{'ip'};
-			print "+ $ip\n" if $verbose & $VERB_ON;
+			print "+ $ip\n" if $verbose & VERB_ON;
 			$rul_add->($ip, $dcid, $db_rate);
 			$add++;
 			next;
@@ -1851,7 +1857,7 @@ sub cmd_sync
 		my $rul_rate = $rul_data{$dcid}{'rate'};
 		if ($rul_rate ne $db_rate) {
 			my $ip = $db_data{$dcid}{'ip'};
-			print "* $ip $rul_rate -> $db_rate\n" if $verbose & $VERB_ON;
+			print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;
 			$rul_change->($ip, $dcid, $db_rate);
 			$chg++;
 		}
@@ -1860,7 +1866,7 @@ sub cmd_sync
 		}
 	}
 
-	unless ($verbose & $VERB_NOBATCH) {
+	unless ($verbose & VERB_NOBATCH) {
 		batch_stop_tc();
 		batch_stop_ips() if $filter_method eq 'flow';
 	}
@@ -1887,7 +1893,7 @@ sub cmd_status
 	}
 	else {
 		log_warn('no shaping rules found');
-		return $E_UNDEF;
+		return E_UNDEF;
 	}
 
 	if ($rqdisc eq 'htb') {
@@ -1898,7 +1904,7 @@ sub cmd_status
 			chomp $s;
 			if ($s =~ /qdisc\ $lqdisk\ ([0-9a-f]+):/xms) {
 				log_warn('shaping rules were successfully created');
-				return $E_OK;
+				return E_OK;
 			}
 		}
 		log_warn('htb qdisc found but there is no child queues');
@@ -1911,13 +1917,13 @@ sub cmd_status
 		foreach my $s (@out) {
 			if ($s =~ /match\ IP.*\/32/xms) {
 				log_warn('shaping rules were successfully created');
-				return $E_OK;
+				return E_OK;
 			}
 		}
 		log_warn('ingress qdisc found but there is no filters for IPs');
-		return $E_UNDEF;
+		return E_UNDEF;
 	}
-	return $E_UNDEF;
+	return E_UNDEF;
 }
 
 sub cmd_ver
@@ -1926,12 +1932,12 @@ sub cmd_ver
 
 	pod2usage({ -exitstatus => 'NOEXIT', -verbose => 99,
 		-sections => 'LICENSE AND COPYRIGHT' });
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_help
 {
-	if ($verbose & $VERB_ON) {
+	if ($verbose & VERB_ON) {
 		pod2usage({ -exitstatus => 0, -verbose => 2 });
 	}
 	else {
@@ -1946,7 +1952,7 @@ sub cmd_help
 		$drv =~ s/([^\n]{1,$linewidth})(?:\b\s*|\n)/$indent$1\n/goixms;
 		print "$drv\n";
 	}
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_dbcreate
@@ -1977,7 +1983,7 @@ sub cmd_dbadd
 	$sth->finish();
 	undef $sth;
 	$dbh->disconnect();
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_dbdel
@@ -1996,7 +2002,7 @@ sub cmd_dbdel
 	}
 	undef $sth;
 	$dbh->disconnect();
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_dbchange
@@ -2012,13 +2018,13 @@ sub cmd_dbchange
 	$sth->finish();
 	undef $sth;
 	$dbh->disconnect();
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_dblist
 {
 	my ($ip) = @_;
-	my $ret = $E_OK;
+	my $ret = E_OK;
 
 	if (!defined $ip) {
 		$ret = db_load();
@@ -2042,7 +2048,7 @@ sub cmd_dblist
 		undef $sth;
 		$dbh->disconnect();
 	}
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_ratecvt
@@ -2054,7 +2060,7 @@ sub cmd_ratecvt
 	my $result;
 	$result = rate_cvt($rate, $unit);
 	print "$result\n";
-	return $E_OK;
+	return E_OK;
 }
 
 sub cmd_calc
@@ -2065,13 +2071,13 @@ sub cmd_calc
 		use Data::Dumper;
 		print Dumper(\%filter_nets);
 		print Dumper(\%class_nets);
-		return $E_OK;
+		return E_OK;
 	}
 	arg_check(\&is_ip, $ip, 'IP');
 	my $cid = ip_classid($ip);
 	my ($ht, $key) = ip_leafht_key($ip);
 	print "classid = $cid, leaf ht = $ht, key = $key\n";
-	return $E_OK;
+	return E_OK;
 }
 
 

@@ -43,13 +43,15 @@ Possible values:
 
 =item B<flow>
 
-use B<flow> classifier and ipset(8) for access control.
+Use B<flow> classifier and ipset(8) for access control.
+This method does not allow to use IPs with the same last two octets.
 
 =item B<u32>
 
-use B<u32> hashing filters.
-Warning: you can not use the IP's with zero last octet with this method due to
-limitations of tc(8) syntax.
+Use B<u32> hashing filters.
+This method allows IPs with the same last two octets, but prohibits the
+addresses with zero last octet due to limitations of tc(8) hashing filters
+syntax.
 
 =back
 
@@ -59,8 +61,8 @@ Rate limiting method.
 Default value: shaping.
 Possible values: B<shaping>, B<policing>, B<hybrid>.
 Note, that B<policing> only works with B<u32> filtering method.
-B<Hybrid> method uses shaping for download and policing for upload, and all rules
-are created on the B<in_if> interface.
+B<Hybrid> method uses shaping for download and policing for upload, and all
+the rules are created on the B<in_if> interface.
 
 =item B<debug>
 

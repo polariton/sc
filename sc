@@ -1998,7 +1998,7 @@ sub cmd_status
 {
 	my @out;
 	my $PIPE;
-	open $PIPE, '-|', "$tc qdisc show dev $o_if"
+	open $PIPE, '-|', "$tc qdisc show dev $i_if"
 		or log_croak("unable to open pipe for $tc");
 	@out = <$PIPE>;
 	close $PIPE or log_croak("unable to close pipe for $tc");
@@ -2031,7 +2031,7 @@ sub cmd_status
 		log_warn('htb qdisc found but there is no child queues');
 	}
 	elsif ($rqdisc eq 'ingress') {
-		open $PIPE, '-|', "$tc -p filter show dev $o_if parent ffff:"
+		open $PIPE, '-|', "$tc -p filter show dev $i_if parent ffff:"
 			or log_croak("unable to open pipe for $tc");
 		@out = <$PIPE>;
 		close $PIPE or log_croak("unable to close pipe for $tc");
@@ -2214,10 +2214,10 @@ B<sc> [options] B<command> [ip] [rate]
 
 =head1 DESCRIPTION
 
-B<sc> is a command-line tool intended to simplify administration of traffic
+sc(8) is a command-line tool intended to simplify administration of traffic
 shaper for Internet service providers. ISP's usually work with the following
 configuration: every customer has it's own IP-address and fixed bandwidth.
-B<sc> works like a wrapper for tc(8), iptables(8) and ipset(8) abstracting you
+sc(8) works like a wrapper for tc(8), iptables(8) and ipset(8) abstracting you
 from complexity of their rules, so you can think only about IPs and bandwidth
 rates and almost forget about classid's, qdiscs, filters and other stuff.
 

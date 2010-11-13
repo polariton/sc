@@ -82,7 +82,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.3.0';
+my $VERSION = '1.3.1';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -909,8 +909,8 @@ sub rul_add_flow
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 
-	iface_add_flow($i_if, $cid, $rate, $ceil);
-	iface_add_flow($o_if, $cid, $rate, $ceil);
+	dev_add_flow($i_if, $cid, $rate, $ceil);
+	dev_add_flow($o_if, $cid, $rate, $ceil);
 	$IPS->("-A $set_name $ip");
 
 	return $?;

@@ -457,7 +457,6 @@ sub main
 			);
 		}
 	}
-
 	return $ret;
 }
 
@@ -622,7 +621,6 @@ sub set_filter_nets {
 		$filter_nets{$n}{'intip_i'} = $ip_i;
 		$filter_nets{$n}{'intip_f'} = $ip_i + $invmask;
 		$filter_nets{$n}{'ht'} = $ht1;
-
 		++$ht1;
 		log_croak("network $n overfulls filter space")
 			if $ht2 > $ht_max;
@@ -650,13 +648,11 @@ sub set_class_nets
 		$class_nets{$n}{'invmask'} = $invmask;
 		$class_nets{$n}{'intip_i'} = $ip_i;
 		$class_nets{$n}{'intip_f'} = $ip_i + $invmask;
-
 		$class_nets{$n}{'classid_i'} = $cid_i;
 		$cid_i += $invmask + 1;
 		log_croak("network $n overfulls classid space")
 			if $cid_i - $cid_min - 1 > $cid_max;
 	}
-
 	return;
 }
 
@@ -677,7 +673,6 @@ sub is_ip
 			return $ip;
 		}
 	}
-
 	return 0;
 }
 
@@ -705,7 +700,6 @@ sub is_rate
 	else {
 		return 0;
 	}
-
 	return $result;
 }
 
@@ -717,7 +711,6 @@ sub arg_check
 	log_croak("$argname is undefined") if !defined $arg;
 	$result = $issub->($arg);
 	log_croak("$arg is invalid $argname") if !$result;
-
 	return $result;
 }
 
@@ -739,7 +732,6 @@ sub ip_classid
 	log_croak(
 		"$ip does not belong to any of specified networks: $network"
 	) if !defined $cid;
-
 	return $cid;
 }
 
@@ -767,7 +759,6 @@ sub ip_leafht_key
 	log_croak(
 		"$ip does not belong to any of specified networks: $network"
 	) if !defined $leafht;
-
 	return ($leafht, $key);
 }
 
@@ -778,13 +769,11 @@ sub ip_leafht_key
 sub div_hmask_u32
 {
 	my ($netmask, $n) = @_;
-
 	log_croak("$n is invalid number of octet") if $n < 1 || $n > 4;
 	# get n-th byte from netmask
 	my $inthmask = (2**(32 - $netmask) - 1) & (0xFF << 8*(4-$n));
 	my $hmask = sprintf '0x%08x', $inthmask;
 	my $div = ($inthmask >> 8*(4-$n)) + 1;
-
 	return ($div, $hmask);
 }
 
@@ -798,7 +787,6 @@ sub ip_texttoint
 	for my $i (0..3) {
 		$int += $oct[$i] * (1 << 8*(3-$i));
 	}
-
 	return $int;
 }
 
@@ -813,7 +801,6 @@ sub ip_inttotext
 		$oct[$i] = int $int/$div;
 		$int %= $div;
 	}
-
 	return join q{.}, @oct;
 }
 
@@ -824,7 +811,6 @@ sub log_syslog
 	openlog($PROG, $syslog_options, $syslog_facility);
 	syslog($severity, $msg);
 	closelog();
-
 	return $!;
 }
 
@@ -875,7 +861,6 @@ sub db_connect
 			$db_user, $db_pass, { RaiseError => 1, AutoCommit => 1 }
 		);
 	}
-
 	return $dbh;
 }
 
@@ -900,7 +885,6 @@ sub db_load
 	$sth->finish();
 	undef $sth;
 	$dbh->disconnect();
-
 	return $dbh;
 }
 
@@ -912,7 +896,6 @@ sub rul_add_flow
 	dev_add_flow($i_if, $cid, $rate, $ceil);
 	dev_add_flow($o_if, $cid, $rate, $ceil);
 	$IPS->("-A $set_name $ip");
-
 	return $?;
 }
 
@@ -938,7 +921,6 @@ sub rul_add_u32
 
 	dev_add_u32($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
 	dev_add_u32($o_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key);
-
 	return $?;
 }
 
@@ -968,7 +950,6 @@ sub rul_add_policer
 
 	dev_add_policer($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	dev_add_policer($o_if, $rate, $ceil, "ip dst $ip", $ht, $key);
-
 	return $?;
 }
 
@@ -981,7 +962,6 @@ sub dev_add_policer
 		"handle $ht:$key:800 u32 ht $ht:$key: match $match ".
 		"police rate $rate burst $policer_burst drop flowid ffff:"
 	);
-
 	return $?;
 }
 
@@ -993,7 +973,6 @@ sub rul_add_hybrid
 
 	dev_add_policer($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	dev_add_u32($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
-
 	return $?;
 }
 
@@ -1004,7 +983,6 @@ sub rul_del_flow
 	$IPS->("-D $set_name $ip");
 	dev_del_flow($i_if, $cid);
 	dev_del_flow($o_if, $cid);
-
 	return $?;
 }
 
@@ -1014,7 +992,6 @@ sub dev_del_flow
 
 	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
 	$TC->("class del dev $dev parent 1: classid 1:$cid");
-
 	return $?;
 }
 
@@ -1025,7 +1002,6 @@ sub rul_del_u32
 
 	dev_del_u32($i_if, $cid, $ht, $key);
 	dev_del_u32($o_if, $cid, $ht, $key);
-
 	return $?
 }
 
@@ -1039,7 +1015,6 @@ sub dev_del_u32
 	);
 	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
 	$TC->("class del dev $dev parent 1: classid 1:$cid");
-
 	return $?;
 }
 
@@ -1050,7 +1025,6 @@ sub rul_del_policer
 
 	dev_del_policer($i_if, $ht, $key);
 	dev_del_policer($o_if, $ht, $key);
-
 	return $?
 }
 
@@ -1062,7 +1036,6 @@ sub dev_del_policer
 		"filter del dev $dev parent ffff: pref $pref_hash ".
 		"handle $ht:$key:800 u32"
 	);
-
 	return $?;
 }
 
@@ -1073,7 +1046,6 @@ sub rul_del_hybrid
 
 	dev_del_policer($i_if, $ht, $key);
 	dev_del_u32($i_if, $cid, $ht, $key);
-
 	return $?
 }
 
@@ -1084,7 +1056,6 @@ sub rul_change_tc
 
 	dev_change_tc($i_if, $cid, $rate, $ceil);
 	dev_change_tc($o_if, $cid, $rate, $ceil);
-
 	return $?;
 }
 
@@ -1096,7 +1067,6 @@ sub dev_change_tc
 		"class change dev $dev parent 1:0 classid 1:$cid htb ".
 		"rate $rate ceil $ceil quantum $quantum"
 	);
-
 	return $?;
 }
 
@@ -1108,6 +1078,7 @@ sub rul_change_hybrid
 
 	dev_add_policer($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	dev_change_tc($i_if, $cid, $rate, $ceil);
+	return $?;
 }
 
 # Get the list of IPs, classids and rates from the actual rules
@@ -1145,7 +1116,6 @@ sub rul_load_flow
 			$rul_data{$cid}{'rate'} = $rate;
 		}
 	}
-
 	return $ret;
 }
 
@@ -1178,7 +1148,6 @@ sub rul_load_u32
 			$rul_data{$cid}{'rate'} = $rate;
 		}
 	}
-
 	return $ret;
 }
 
@@ -1202,7 +1171,6 @@ sub rul_load_policer
 			}
 		}
 	}
-
 	return $ret;
 }
 
@@ -1220,7 +1188,6 @@ sub rul_init_flow
 	else {
 		log_croak("unknown set type \'$set_type\' specified");
 	}
-
 	return $?;
 }
 
@@ -1233,7 +1200,6 @@ sub dev_init_flow
 		"filter add dev $dev parent 1:0 protocol ip pref $pref_hash ".
 		"handle 1 flow map key src and 0xffff"
 	);
-
 	return $?;
 }
 
@@ -1250,7 +1216,6 @@ sub rul_init_ipt
 	$sys->(
 		"$iptables -A $chain_name -p all -m set --set $set_name dst -j ACCEPT"
 	);
-
 	return $?;
 }
 
@@ -1322,7 +1287,6 @@ sub dev_init_u32
 		"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
 		'u32 match u32 0 0 at 0 police mtu 1 action drop'
 	);
-
 	return $?;
 }
 
@@ -1394,7 +1358,6 @@ sub dev_init_policer
 		"filter add dev $dev parent ffff:0 protocol ip pref $pref_default ".
 		'u32 match u32 0 0 at 0 police mtu 1 action drop'
 	);
-
 	return $?;
 }
 
@@ -1677,6 +1640,7 @@ sub rul_reset_hybrid
 {
 	$sys->("$tc qdisc del dev $i_if handle ffff: ingress");
 	$sys->("$tc qdisc del dev $i_if root handle 1: htb");
+	return $?;
 }
 
 sub print_rules

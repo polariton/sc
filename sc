@@ -673,7 +673,7 @@ sub is_ip
 	chomp $ip;
 	if ($ip =~ /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/ixms) {
 		if ($1 >  0 && $1 <  255 && $2 >= 0 && $2 <= 255 &&
-			$3 >= 0 && $3 <= 255 && $4 >  0 && $4 <= 255) {
+			$3 >= 0 && $3 <= 255 && $4 >= 0 && $4 <= 255) {
 			return $ip;
 		}
 	}
@@ -955,7 +955,7 @@ sub dev_add_u32
 	);
 	$TC->(
 		"filter replace dev $dev parent 1: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match $match flowid 1:$cid"
+		"handle $ht:$key:800 u32 ht $ht:$key: match $match flowid 1:$cid"
 	);
 	return $?;
 }
@@ -978,7 +978,7 @@ sub dev_add_policer
 
 	$TC->(
 		"filter replace dev $dev parent ffff: pref $pref_leaf ".
-		"handle $ht:$key u32 ht $ht:$key: match $match ".
+		"handle $ht:$key:800 u32 ht $ht:$key: match $match ".
 		"police rate $rate burst $policer_burst drop flowid ffff:"
 	);
 
@@ -1035,7 +1035,7 @@ sub dev_del_u32
 
 	$TC->(
 		"filter del dev $dev parent 1: pref $pref_hash ".
-		"handle $ht:$key u32"
+		"handle $ht:$key:800 u32"
 	);
 	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
 	$TC->("class del dev $dev parent 1: classid 1:$cid");
@@ -1060,7 +1060,7 @@ sub dev_del_policer
 
 	$TC->(
 		"filter del dev $dev parent ffff: pref $pref_hash ".
-		"handle $ht:$key u32"
+		"handle $ht:$key:800 u32"
 	);
 
 	return $?;

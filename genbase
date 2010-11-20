@@ -42,8 +42,6 @@ print $SCH "dbcreate\n" if $create;
 
 for my $i ($intip_i .. $intip_f) {
 	my $rate = 1 << (int(rand(9)) + 7);
-	# skip IP's with zero last octet
-	next unless $i & 0xff;
 	print {$SCH} "dbadd ", ip_inttotext($i), " $rate$rate_unit\n";
 }
 close $SCH or die "$PROG: unable to close pipe for sc";

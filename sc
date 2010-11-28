@@ -313,6 +313,7 @@ my $sys;
 my $pref_hash = 10; # hashing filters and flow
 my $pref_leaf = 20; # hash table entries
 my $pref_default = 30; # default rule
+
 my $ip_re = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}';
 
 #
@@ -606,21 +607,6 @@ sub acomp_cmd
 		log_warn("unknown command \'$input\'\n");
 		return;
 	}
-}
-
-# wrappers for different debug modes
-
-sub sys_debug_print
-{
-	my ($c) = @_;
-	return print "$c\n";
-}
-
-sub sys_debug_on
-{
-	my ($c) = @_;
-	print "$c\n" if system $c;
-	return $?;
 }
 
 sub log_syslog
@@ -982,7 +968,6 @@ sub flow_add
 {
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
-
 	flow_dev_add($i_if, $cid, $rate, $ceil);
 	flow_dev_add($o_if, $cid, $rate, $ceil);
 	$IPS->("-A $set_name $ip");
@@ -1364,7 +1349,6 @@ sub u32_add
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-
 	u32_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
 	u32_dev_add($o_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key);
 	return $?;
@@ -1375,8 +1359,8 @@ sub u32_dev_add
 	my ($dev, $cid, $rate, $ceil, $match, $ht, $key) = @_;
 
 	$TC->(
-		"class replace dev $dev parent 1: classid 1:$cid ".
-		"htb rate $rate ceil $ceil quantum $quantum"
+		"class replace dev $dev parent 1: classid 1:$cid htb ".
+		"rate $rate ceil $ceil quantum $quantum"
 	);
 	$TC->(
 		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
@@ -1619,7 +1603,6 @@ sub pol_del
 {
 	my ($ip, $cid) = @_;
 	my ($ht, $key) = ip_leafht_key($ip);
-
 	pol_dev_del($i_if, $ht, $key);
 	pol_dev_del($o_if, $ht, $key);
 	return $?
@@ -1726,7 +1709,6 @@ sub hybrid_add
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-
 	pol_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	u32_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
 	return $?;
@@ -1736,7 +1718,6 @@ sub hybrid_del
 {
 	my ($ip, $cid) = @_;
 	my ($ht, $key) = ip_leafht_key($ip);
-
 	pol_dev_del($i_if, $ht, $key);
 	u32_dev_del($i_if, $cid, $ht, $key);
 	return $?
@@ -1747,7 +1728,6 @@ sub hybrid_change
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-
 	pol_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	htb_dev_change($i_if, $cid, $rate, $ceil);
 	return $?;
@@ -2041,7 +2021,6 @@ sub cmd_status
 sub cmd_ver
 {
 	print "$VERSTR\n\n";
-
 	pod2usage({ -exitstatus => 'NOEXIT', -verbose => 99,
 		-sections => 'LICENSE AND COPYRIGHT' });
 	return E_OK;
@@ -2101,7 +2080,6 @@ sub cmd_dbadd
 sub cmd_dbdel
 {
 	my @ips = @_;
-
 	my $dbh = db_connect();
 	my $sth;
 
@@ -2160,7 +2138,7 @@ sub cmd_dblist
 		undef $sth;
 		$dbh->disconnect();
 	}
-	return E_OK;
+	return $ret;
 }
 
 sub cmd_ratecvt

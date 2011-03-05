@@ -166,13 +166,10 @@ Default value: same as B<network> parameter.
 Possible values: a list of network with mask from 16 to 31 that is equivalent
 or includes the networks specified in B<network> parameter.
 
-=item B<policer_burst>
+=item B<policer_burst_ratio>
 
-Amount of bytes to buffer for every filter with policing rules.
-Default value: 1500Kb.
-This value is suitable for users with large bandwidths (up to 40mibit/s).
-If the average bandwidths in your network are much lower, feel free to
-decrease it.
+Ratio between the size of policer buffer size and bandwidth rate.
+Default value: 0.1
 
 =item B<quantum>
 

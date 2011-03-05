@@ -49,8 +49,8 @@ my $db_user = 'username';
 my $db_pass = 'password';
 my $db_name = 'sc.db';
 
-my $query_create = 'CREATE TABLE rates (ip INTEGER PRIMARY KEY, '.
-                   'rate INTEGER NOT NULL)';
+my $query_create = 'CREATE TABLE rates (ip UNSIGNED INTEGER PRIMARY KEY, '.
+                   'rate UNSIGNED INTEGER NOT NULL)';
 my $query_load = 'SELECT ip, rate FROM rates';
 my $query_list = 'SELECT ip, rate FROM rates WHERE ip=?';
 my $query_add = 'INSERT INTO rates VALUES (?, ?)';
@@ -61,7 +61,7 @@ my $set_name = 'pass';
 my $set_type = 'ipmap';
 my $set_size = '65536';
 my $chain_name = 'FORWARD';
-my $policer_burst = '1500k';
+my $policer_burst_ratio = 0.1;
 my $quantum = '1500';
 my $rate_unit = 'kibit';
 my $rate_ratio = 1.0;
@@ -259,45 +259,45 @@ EOF
 
 # options dispatch table for AppConfig and Getopt::Long
 my %optd = (
-	'f|config=s'        => \$cfg_file,
-	'iptables=s'        => \$iptables,
-	'tc=s'              => \$tc,
-	'ipset=s'           => \$ipset,
-	'o|out_if=s'        => \$o_if,
-	'i|in_if=s'         => \$i_if,
-	'filter_method=s'   => \$filter_method,
-	'limit_method=s'    => \$limit_method,
-	'd|debug=i'         => \$debug,
-	'v|verbose=i'       => \$verbose,
-	'q|quiet!'          => \$quiet,
-	'c|colored!'        => \$colored,
-	'j|joint!'          => \$joint,
-	'b|batch!'          => \$batch,
-	'N|network=s'       => \$network,
-	'filter_network=s'  => \$filter_network,
-	'policer_burst=s'   => \$policer_burst,
-	'quantum=s'         => \$quantum,
-	'u|rate_unit=s'     => \$rate_unit,
-	'r|rate_ratio=f'    => \$rate_ratio,
-	'leaf_qdisc=s'      => \$leaf_qdisc,
-	'chain=s'           => \$chain_name,
-	's|set_name=s'      => \$set_name,
-	'set_type=s'        => \$set_type,
-	'set_size=s'        => \$set_size,
-	'db_driver=s'       => \$db_driver,
-	'db_host=s'         => \$db_host,
-	'db_name=s'         => \$db_name,
-	'db_user=s'         => \$db_user,
-	'db_pass=s'         => \$db_pass,
-	'query_create=s'    => \$query_create,
-	'query_load=s'      => \$query_load,
-	'query_list=s'      => \$query_list,
-	'query_add=s'       => \$query_add,
-	'query_del=s'       => \$query_del,
-	'query_change=s'    => \$query_change,
-	'S|syslog'          => \$syslog,
-	'syslog_options'    => \$syslog_options,
-	'syslog_facility=s' => \$syslog_facility,
+	'f|config=s'            => \$cfg_file,
+	'iptables=s'            => \$iptables,
+	'tc=s'                  => \$tc,
+	'ipset=s'               => \$ipset,
+	'o|out_if=s'            => \$o_if,
+	'i|in_if=s'             => \$i_if,
+	'filter_method=s'       => \$filter_method,
+	'limit_method=s'        => \$limit_method,
+	'd|debug=i'             => \$debug,
+	'v|verbose=i'           => \$verbose,
+	'q|quiet!'              => \$quiet,
+	'c|colored!'            => \$colored,
+	'j|joint!'              => \$joint,
+	'b|batch!'              => \$batch,
+	'N|network=s'           => \$network,
+	'filter_network=s'      => \$filter_network,
+	'policer_burst_ratio=s' => \$policer_burst_ratio,
+	'quantum=s'             => \$quantum,
+	'u|rate_unit=s'         => \$rate_unit,
+	'r|rate_ratio=f'        => \$rate_ratio,
+	'leaf_qdisc=s'          => \$leaf_qdisc,
+	'chain=s'               => \$chain_name,
+	's|set_name=s'          => \$set_name,
+	'set_type=s'            => \$set_type,
+	'set_size=s'            => \$set_size,
+	'db_driver=s'           => \$db_driver,
+	'db_host=s'             => \$db_host,
+	'db_name=s'             => \$db_name,
+	'db_user=s'             => \$db_user,
+	'db_pass=s'             => \$db_pass,
+	'query_create=s'        => \$query_create,
+	'query_load=s'          => \$query_load,
+	'query_list=s'          => \$query_list,
+	'query_add=s'           => \$query_add,
+	'query_del=s'           => \$query_del,
+	'query_change=s'        => \$query_change,
+	'S|syslog'              => \$syslog,
+	'syslog_options'        => \$syslog_options,
+	'syslog_facility=s'     => \$syslog_facility,
 );
 
 my %db_data;
@@ -1590,6 +1590,9 @@ sub pol_add
 sub pol_dev_add
 {
 	my ($dev, $rate, $ceil, $match, $ht, $key) = @_;
+	my $rate_byte = rate_cvt($rate, 'bps');
+	$rate_byte =~ s/bps//gxms;
+	my $policer_burst = round($policer_burst_ratio * $rate_byte) . 'b';
 
 	$TC->(
 		"filter replace dev $dev parent ffff: pref $pref_leaf ".
@@ -1709,6 +1712,7 @@ sub hybrid_add
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
+
 	pol_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	u32_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
 	return $?;
@@ -1728,6 +1732,7 @@ sub hybrid_change
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
+
 	pol_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
 	htb_dev_change($i_if, $cid, $rate, $ceil);
 	return $?;
@@ -2426,9 +2431,9 @@ details).
 
 Network(s) for hashing filter generation (see sc.conf(5) for details).
 
-=item B<--policer_burst> size
+=item B<--policer_burst_ratio> real number
 
-Amount of bytes to buffer for every filter with policing rules.
+Ratio between the size of policer buffer size and bandwidth rate.
 
 =item B<--quantum> size
 

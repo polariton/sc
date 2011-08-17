@@ -320,6 +320,9 @@ my $ip_re = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}';
 # Main routine
 #
 
+# get options from command line (for -f option)
+GetOptions(%optd) or exit E_PARAM;
+
 # read configuration file
 if (-T $cfg_file) {
 	my @args = keys %optd;
@@ -343,6 +346,7 @@ else {
 }
 
 # get options from command line
+# to override configuration file parameters
 GetOptions(%optd) or exit E_PARAM;
 
 # command queue for batch mode

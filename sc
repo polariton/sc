@@ -320,8 +320,10 @@ my $ip_re = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}';
 # Main routine
 #
 
-# get options from command line (for -f option)
-GetOptions(%optd) or exit E_PARAM;
+my @argv = @ARGV;
+
+# parse command line to get the name of configuration file properly
+GetOptionsFromArray(\@argv, %optd) or exit E_PARAM;
 
 # read configuration file
 if (-T $cfg_file) {
@@ -345,8 +347,7 @@ else {
 	log_carp("unable to read configuration file $cfg_file");
 }
 
-# get options from command line
-# to override configuration file parameters
+# parse command line again to override the values from configuration file
 GetOptions(%optd) or exit E_PARAM;
 
 # command queue for batch mode

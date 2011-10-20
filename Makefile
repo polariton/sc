@@ -1,5 +1,5 @@
 PROG=sc
-VERSION=1.3.3
+VERSION=1.3.4
 ARCH=$(PROG)-$(VERSION).tar.bz2
 
 DESTDIR?=/usr/local/sbin
@@ -7,17 +7,17 @@ MANDIR?=/usr/local/share/man
 INITDIR?=/etc/init.d
 CFGDIR=/etc/sc
 
-CLFILES?=sc.8.gz sc.conf.5.gz $(ARCH) *.batch
+CLFILES?=sc.8 sc.conf.5 $(ARCH) *.batch
 
 
-man: sc.8.gz sc.conf.5.gz
+man: sc.8 sc.conf.5
 
-sc.8.gz: sc
+sc.8: sc
 	pod2man --section=8 --release=" " \
-		--center="Linux System Manager's Manual" $^ | gzip > $@
+		--center="Linux System Manager's Manual" $^ > $@
 
-sc.conf.5.gz: sc.conf.pod
-	pod2man --section=5 --release=" " --center=" " $^ | gzip > $@
+sc.conf.5: sc.conf.pod
+	pod2man --section=5 --release=" " --center=" " $^ > $@
 
 help:
 	@echo "Targets:" ;\
@@ -28,23 +28,27 @@ help:
 	 echo "  srcdist    create archive with source distribution" ;\
 	 echo "  uninstall  uninstall program"
 
-install: sc sc.init sc.conf.5.gz sc.8.gz sc.conf
-	install -o root -g root -m 755 $(PROG) $(DESTDIR)
-	install -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
-	install -o root -g root -m 644 sc.8.gz $(MANDIR)/man8
-	install -o root -g root -m 644 sc.conf.5.gz $(MANDIR)/man5
+install: sc sc.init sc.conf.5 sc.8 sc.conf
+	install -D -o root -g root -m 755 $(PROG) $(DESTDIR)
+	install -D -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
+	install -D -o root -g root -m 644 sc.8 $(MANDIR)/man8
+	install -D -o root -g root -m 644 sc.conf.5 $(MANDIR)/man5
 	mkdir -p $(CFGDIR)
 	if [ -f $(CFGDIR)/sc.conf ]; then \
-		install -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\
+		install -D -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\
 	else \
-		install -o root -g root -m 644 sc.conf $(CFGDIR) ;\
+		install -D -o root -g root -m 644 sc.conf $(CFGDIR) ;\
 	fi
 
 uninstall:
-	rm $(DESTDIR)/sc
-	[ -f $(INITDIR)/sc ] && rm $(INITDIR)/sc
-	rm $(MANDIR)/man8/sc.8.gz
-	rm $(MANDIR)/man5/sc.conf.5.gz
+	-rm $(DESTDIR)/sc
+	-rm $(INITDIR)/sc
+	-rm $(MANDIR)/man8/sc.8
+	-rm $(MANDIR)/man5/sc.conf.5
+	-[ -f $(MANDIR)/man8/sc.8.gz ] && rm $(MANDIR)/man8/sc.8.gz
+	-[ -f $(MANDIR)/man5/sc.conf.5.gz ] && rm $(MANDIR)/man5/sc.conf.5.gz
+
+reinstall: uninstall install
 
 clean:
 	rm -f $(CLFILES)

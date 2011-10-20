@@ -82,7 +82,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.3.3';
+my $VERSION = '1.3.4';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -320,10 +320,10 @@ my $ip_re = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}';
 # Main routine
 #
 
-my @argv = @ARGV;
-
 # parse command line to get the name of configuration file properly
+my @argv = @ARGV;
 GetOptionsFromArray(\@argv, %optd) or exit E_PARAM;
+my $batch_cl = $batch;
 
 # read configuration file
 if (-T $cfg_file) {
@@ -347,14 +347,14 @@ else {
 	log_carp("unable to read configuration file $cfg_file");
 }
 
-# parse command line again to override the values from configuration file
+# override values that we read from file by the command line parameters
 GetOptions(%optd) or exit E_PARAM;
 
-# command queue for batch mode
-my @queue;
-
 if ($batch) {
-	while(my $c = <>) {
+	# command queue for batch mode
+	my @queue;
+
+	while (my $c = <>) {
 		chomp $c;
 		next if $c =~ /^\s*$/ixms;
 		next if $c =~ /^\#/ixms;
@@ -379,7 +379,7 @@ sub main
 	my @argv = @_;
 	my $ret = E_OK;
 
-	# process command line
+	# process command line in batch mode
 	if ($batch) {
 		GetOptionsFromArray(\@argv, %optd) or return E_PARAM;
 	}
@@ -2688,7 +2688,7 @@ Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2008-2010. Stanislav Kruchinin.
+Copyright (c) 2008-2012. Stanislav Kruchinin.
 
 License: GNU GPL version 2 or later
 

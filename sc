@@ -1960,7 +1960,10 @@ sub cmd_sync
 		}
 		# change if rate in database is different
 		my $rul_rate = $rul_data{$dcid}{'rate'};
-		$rul_rate ||= 0;
+		if (!nonempty($rul_rate)) {
+			log_carp("IP $ip has undefined rate in shaping rules\n");
+			$rul_rate = 0;
+		}
 		if ($rul_rate ne $db_rate) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;

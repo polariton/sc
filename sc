@@ -1961,7 +1961,7 @@ sub cmd_sync
 		# change if rate in database is different
 		my $rul_rate = $rul_data{$dcid}{'rate'};
 		if (!nonempty($rul_rate)) {
-			log_carp("IP $ip has undefined rate in shaping rules\n");
+			log_carp("Classid $dcid has undefined rate in shaping rules\n");
 			$rul_rate = 0;
 		}
 		if ($rul_rate ne $db_rate) {

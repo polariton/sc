@@ -43,6 +43,9 @@ my $joint = 0;
 my $o_if = 'eth0';
 my $i_if = 'eth1';
 
+my $allow_out;
+my $allow_in;
+
 my $db_driver = 'sqlite';
 my $db_host = '127.0.0.1';
 my $db_user = 'username';
@@ -82,7 +85,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.3.4';
+my $VERSION = '1.3.5';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -1017,7 +1020,7 @@ sub flow_load
 	my ($ip, $cid, $rate);
 	my $ret = E_OK;
 
-	open my $IPH, '-|', "$ipset -nsL $set_name" or
+	open my $IPH, '-|', "$ipset -n -s -L $set_name" or
 		log_croak("unable to open pipe for $ipset");
 	my @ipsout = <$IPH>;
 	close $IPH or log_carp("unable to close pipe for $ipset");
@@ -1108,15 +1111,18 @@ sub flow_reset
 sub ipt_init
 {
 	$sys->("$iptables --policy FORWARD DROP");
+
 	if ($chain_name ne 'FORWARD') {
 		$sys->("$iptables --new-chain $chain_name");
 		$sys->("$iptables -A FORWARD -j $chain_name");
 	}
 	$sys->(
-		"$iptables -A $chain_name -p all -m set --set $set_name src -j ACCEPT"
+		"$iptables -A $chain_name -p all -m set --match-set $set_name src ".
+		'-j ACCEPT'
 	);
 	$sys->(
-		"$iptables -A $chain_name -p all -m set --set $set_name dst -j ACCEPT"
+		"$iptables -A $chain_name -p all -m set --match-set $set_name dst ".
+		'-j ACCEPT'
 	);
 	return $?;
 }
@@ -1273,8 +1279,8 @@ sub u32_div_hmask
 
 sub u32_init
 {
-	u32_dev_init($o_if, 'src', 12);
 	u32_dev_init($i_if, 'dst', 16);
+	u32_dev_init($o_if, 'src', 12);
 	return $?;
 }
 
@@ -1924,7 +1930,7 @@ sub cmd_show
 
 sub cmd_sync
 {
-	my ($add, $del, $chg) = (0,0,0);
+	my ($add, $del, $chg) = (0, 0, 0);
 
 	$rul_load->();
 	db_load();
@@ -1961,7 +1967,7 @@ sub cmd_sync
 		# change if rate in database is different
 		my $rul_rate = $rul_data{$dcid}{'rate'};
 		if (!nonempty($rul_rate)) {
-			log_carp("IP $ip has undefined rate in shaping rules\n");
+			log_carp("Classid $dcid has undefined rate in shaping rules\n");
 			$rul_rate = 0;
 		}
 		if ($rul_rate ne $db_rate) {

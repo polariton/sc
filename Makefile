@@ -1,5 +1,5 @@
 PROG=sc
-VERSION=1.3.4
+VERSION=1.3.5
 ARCH=$(PROG)-$(VERSION).tar.bz2
 
 DESTDIR?=/usr/local/sbin
@@ -31,8 +31,8 @@ help:
 install: sc sc.init sc.conf.5 sc.8 sc.conf
 	install -D -o root -g root -m 755 $(PROG) $(DESTDIR)
 	install -D -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
-	install -D -o root -g root -m 644 sc.8 $(MANDIR)/man8
-	install -D -o root -g root -m 644 sc.conf.5 $(MANDIR)/man5
+	install -D -o root -g root -m 644 sc.8 $(MANDIR)/man8/sc.8
+	install -D -o root -g root -m 644 sc.conf.5 $(MANDIR)/man5/sc.conf.5
 	mkdir -p $(CFGDIR)
 	if [ -f $(CFGDIR)/sc.conf ]; then \
 		install -D -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\

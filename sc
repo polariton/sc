@@ -19,7 +19,7 @@ my $cfg_file = '/etc/sc/sc.conf';
 
 my $iptables = '/sbin/iptables';
 my $tc = '/sbin/tc';
-my $ipset = '/usr/local/sbin/ipset';
+my $ipset = '/sbin/ipset';
 
 use constant {
 	DEBUG_OFF   => 0, # no debug output
@@ -42,9 +42,6 @@ my $joint = 0;
 
 my $o_if = 'eth0';
 my $i_if = 'eth1';
-
-my $allow_out;
-my $allow_in;
 
 my $db_driver = 'sqlite';
 my $db_host = '127.0.0.1';

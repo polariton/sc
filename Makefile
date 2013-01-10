@@ -33,12 +33,7 @@ install: sc sc.init sc.conf.5 sc.8 sc.conf
 	install -D -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
 	install -D -o root -g root -m 644 sc.8 $(MANDIR)/man8/sc.8
 	install -D -o root -g root -m 644 sc.conf.5 $(MANDIR)/man5/sc.conf.5
-	mkdir -p $(CFGDIR)
-	if [ -f $(CFGDIR)/sc.conf ]; then \
-		install -D -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default ;\
-	else \
-		install -D -o root -g root -m 644 sc.conf $(CFGDIR) ;\
-	fi
+	install -D -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default
 
 uninstall:
 	-rm $(DESTDIR)/sc

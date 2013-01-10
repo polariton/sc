@@ -2,8 +2,8 @@
 
 ### BEGIN INIT INFO
 # Provides:		sc
-# Required-Start:	$remote_fs $syslog
-# Required-Stop:	$remote_fs $syslog
+# Required-Start:	$remote_fs $syslog $network
+# Required-Stop:	$remote_fs $syslog $network
 # Default-Start:	2 3 4 5
 # Default-Stop:		1
 # Short-Description:	Shaper Control Tool

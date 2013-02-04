@@ -2007,11 +2007,11 @@ sub cmd_status
 
 	if ($rqdisc eq 'htb') {
 		my @lqd = split /\ /xms, $leaf_qdisc;
-		my $lqdisk = $lqd[0];
+		my $lqdisc = $lqd[0];
 		shift @out;
 		foreach my $s (@out) {
 			chomp $s;
-			if ($s =~ /qdisc\ $lqdisk\ ([0-9a-f]+):/xms) {
+			if ($s =~ /qdisc\ $lqdisc\ ([0-9a-f]+):/xms) {
 				log_warn('shaping rules were successfully created');
 				return E_OK;
 			}

@@ -29,11 +29,11 @@ help:
 	 echo "  uninstall  uninstall program"
 
 install: sc sc.init sc.conf.5 sc.8 sc.conf
-	install -D -o root -g root -m 755 $(PROG) $(DESTDIR)
-	install -D -o root -g root -m 755 $(PROG).init $(INITDIR)/$(PROG)
-	install -D -o root -g root -m 644 sc.8 $(MANDIR)/man8/sc.8
-	install -D -o root -g root -m 644 sc.conf.5 $(MANDIR)/man5/sc.conf.5
-	install -D -o root -g root -m 644 sc.conf $(CFGDIR)/sc.conf.default
+	install -D -m 755 $(PROG) $(DESTDIR)
+	install -D -m 755 $(PROG).init $(INITDIR)/$(PROG)
+	install -D -m 644 sc.8 $(MANDIR)/man8/sc.8
+	install -D -m 644 sc.conf.5 $(MANDIR)/man5/sc.conf.5
+	install -D -m 644 sc.conf $(CFGDIR)/sc.conf.default
 
 uninstall:
 	-rm $(DESTDIR)/sc

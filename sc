@@ -2762,7 +2762,7 @@ Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2008-2012. Stanislav Kruchinin.
+Copyright (c) 2008-2014. Stanislav Kruchinin.
 
 License: GNU GPL version 2 or later
 

@@ -11,8 +11,8 @@ B<sc.conf> - configuration file for sc(8).
 
 =head1 DESCRIPTION
 
-The F<sc.conf> is parsed using C<AppConfig> module and has a simple C<variable =
-value> form.
+The F<sc.conf> is parsed using C<AppConfig> module and has a simple C<variable
+= value> form.
 Expansion for internal and environment variables is enabled (see AppConfig(3)
 for details).
 The file may contain extra tabs and newlines for formatting.
@@ -31,6 +31,8 @@ Location of tc(8), iptables(8) and ipset(8) executables, respectively.
 
 Names of interfaces that will be used for shaping of output and input traffic,
 respectively.
+Possible values: interface name or "disable" keyword, which disables rule
+generation.
 
 =item B<filter_method>
 
@@ -50,7 +52,7 @@ This method does not allow to use IPs with the same last two octets.
 
 Use B<u32> hashing filters.
 This method allows IPs with the same last two octets, but prohibits the
-addresses with zero last octet due to limitations of tc(8) hashing filters
+addresses with the zero last octet due to limitations of tc(8) hashing filters
 syntax.
 
 =back
@@ -60,9 +62,10 @@ syntax.
 Rate limiting method.
 Default value: shaping.
 Possible values: B<shaping>, B<policing>, B<hybrid>.
-Note, that B<policing> only works with B<u32> filtering method.
-B<Hybrid> method uses shaping for download and policing for upload, and all
+Note, that B<policing> method only works with B<u32> filtering method.
+B<hybrid> method uses shaping for download and policing for upload, and all
 the rules are created on the B<in_if> interface.
+This is suitable, when shaper performs NAT on the outbound interface.
 
 =item B<debug>
 
@@ -130,8 +133,8 @@ Possible values: boolean.
 
 =item B<joint>
 
-Perform add, change and delete operation on rules and database by a single
-command.
+Perform B<add>, B<change> and B<delete> operations on rules and database with
+a single command.
 
 =item B<network>
 
@@ -153,7 +156,7 @@ Network list for hashing filters generation. Makes sence only for B<u32>
 method.
 To improve the classification performance you may specify here a summarized
 network just like in case of supernetting (route aggregation).
-For example, if you have the following network configuration
+For example, if you have the following networks
 
 	network = 10.0.0.0/20 10.0.253.0/24 10.0.254.0/24
 
@@ -163,8 +166,24 @@ by a single hashing filer
 	filter_network = 10.0.0.0/16
 
 Default value: same as B<network> parameter.
-Possible values: a list of network with mask from 16 to 31 that is equivalent
-or includes the networks specified in B<network> parameter.
+Possible values: a list of networks with mask from 16 to 31, that includes the
+networks specified in B<network> parameter.
+
+=item B<bypass_int>
+
+List of internal networks and IPs, whose traffic is transmitted without
+shaping.
+
+Default value: empty
+Possible values: space-separated list of networks with masks from 16 to 32
+
+=item B<bypass_ext>
+
+List of external networks and IPs, whose traffic is transmitted without
+shaping.
+
+Default value: empty
+Possible values: space-separated list of networks with masks from 16 to 32
 
 =item B<policer_burst_ratio>
 

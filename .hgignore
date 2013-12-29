@@ -10,4 +10,7 @@ draft
 *.out
 *.batch
 tags
+*.5
+*.8
+*.pl
 

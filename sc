@@ -29,7 +29,7 @@ my $debug = DEBUG_OFF;
 use constant {
 	VERB_OFF => 0,     # no verbose messages
 	VERB_ON => 1,      # enable messages
-	VERB_NOBATCH => 2, # disable batch modes of tc and ipset
+	VERB_NOBATCH => 2, # disable batch mode of tc
 };
 my $verbose = VERB_OFF;
 
@@ -82,7 +82,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.4.0';
+my $VERSION = '1.5.0';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -276,11 +276,11 @@ my %optd = (
 	'bypass_int=s'          => \$bypass_int,
 	'bypass_ext=s'          => \$bypass_ext,
 	'policer_burst_ratio=s' => \$policer_burst_ratio,
-	'quantum=s'             => \$quantum,
+	'Q|quantum=s'           => \$quantum,
 	'u|rate_unit=s'         => \$rate_unit,
 	'r|rate_ratio=f'        => \$rate_ratio,
-	'root_qdisc=s'          => \$root_qdisc,
-	'leaf_qdisc=s'          => \$leaf_qdisc,
+	'R|root_qdisc=s'        => \$root_qdisc,
+	'L|leaf_qdisc=s'        => \$leaf_qdisc,
 	'db_driver=s'           => \$db_driver,
 	'db_host=s'             => \$db_host,
 	'db_name=s'             => \$db_name,
@@ -375,8 +375,6 @@ else {
 
 exit $RET;
 
-## end of main routine
-
 sub main
 {
 	my @args = @_;
@@ -446,7 +444,6 @@ sub main
 	}
 	return $ret;
 }
-
 
 sub usage
 {
@@ -578,7 +575,6 @@ sub round
 	return int($n + .5*($n <=> 0));
 }
 
-# autocompletion for commands
 sub acomp_cmd
 {
 	my ($input) = @_;
@@ -928,9 +924,7 @@ sub bypass_init
 	return $?;
 }
 
-#
 # HTB
-#
 
 sub htb_dev_add_class
 {
@@ -966,9 +960,7 @@ sub htb_dev_del_class
 	return $?;
 }
 
-#
-# HFSC routines
-#
+# HFSC
 
 sub hfsc_dev_add_class
 {
@@ -1096,7 +1088,7 @@ sub u32_div_hmask
 	return ($div, $hmask);
 }
 
-# u32 hashing filters with shaping
+# shaping
 
 sub shaper_init
 {
@@ -1358,7 +1350,7 @@ sub shaper_reset
 	return $?;
 }
 
-# u32 hashing filters with policing
+# policing
 
 sub policer_init
 {
@@ -1567,7 +1559,7 @@ sub policer_reset
 	return $?;
 }
 
-# u32 hashing filters with policing and shaping
+# policing and shaping on ingress interface
 
 sub hybrid_init
 {
@@ -2059,9 +2051,9 @@ B<sc> [options] B<command> [ip] [rate]
 sc(8) is a command-line tool intended to simplify administration of traffic
 shaper for Internet service providers. ISP's usually work with the following
 configuration: every customer has it's own IP-address and fixed bandwidth.
-sc(8) works like a wrapper for tc(8), iptables(8) and ipset(8) abstracting you
-from complexity of their rules, so you can think only about IPs and bandwidth
-rates and almost forget about classid's, qdiscs, filters and other stuff.
+sc(8) works as a wrapper for tc(8) abstracting you from complexity of its
+rules, so you can think only about IPs and bandwidth rates and almost forget
+about classid's, qdiscs, filters and other stuff.
 
 =head2 Main features
 
@@ -2257,7 +2249,7 @@ enable verbose messages (i.e. for results of `sync' command)
 
 =item B<2>
 
-disable usage of tc(8) and ipset(8) batch rule loading
+disable usage of tc(8) batch rule loading
 
 =item B<3>
 
@@ -2267,8 +2259,7 @@ do B<1> + B<2>
 
 =item B<-q>, B<--quiet>
 
-Suppress output of error messages from external command-line tools like tc(8),
-iptables(8) and ipset(8).
+Suppress output of error messages from external command-line tools like tc(8).
 
 =item B<-c>, B<--colored>
 
@@ -2321,22 +2312,6 @@ Used only for B<load> and B<sync> commands.
 =item B<-l>, B<--leaf_qdisc> string
 
 Leaf qdisc and parameters
-
-=item B<--chain> name
-
-Name of iptables(8) chain to use
-
-=item B<-s>, B<--set_name> name
-
-Name of IP set for storage of allowed IPs
-
-=item B<--set_type> type
-
-Type of IP set (ipmap or iphash)
-
-=item B<--set_size> size
-
-Size of IP set (up to 65536)
 
 =item B<--db_driver> name
 
@@ -2472,8 +2447,7 @@ The error messages are printed to standard error.
 To print the command lines that return nonzero error codes, use B<-d 1>
 option.
 To print all generated command lines without execution, use B<-d 2> option.
-To disable the usage of the batch modes of tc(8) and ipset(8), use B<-v 2>
-option.
+To disable the usage of the batch mode of tc(8), use B<-v 2> option.
 For more information please read the section B<OPTIONS>.
 
 Program may return one of the following exit codes or the exit code of the
@@ -2537,8 +2511,7 @@ filters is limited by 0x799.
 
 sc.conf(5), tc(8), tc-htb(8), tc-hfsc(8), Getopt::Long(3),
 AppConfig(3),
-http://lartc.org/howto/lartc.adv-filter.hashing.html,
-http://www.mail-archive.com/netdev@vger.kernel.org/msg60638.html.
+http://lartc.org/howto/lartc.adv-filter.hashing.html.
 
 
 =head1 AUTHOR

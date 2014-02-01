@@ -15,7 +15,7 @@ use POSIX qw( isatty );
 # Configurable parameters
 #
 
-my $cfg_file = './sc.conf';
+my $cfg_file = '/etc/sc/sc.conf';
 
 my $tc = '/sbin/tc';
 
@@ -65,7 +65,7 @@ my $rate_ratio = 1.0;
 my $default_cid = 'fffe';
 my $root_qdisc = 'htb';
 my $leaf_qdisc = 'pfifo limit 50';
-my $network = '172.16.0.0/16';
+my $network = '10.0.0.0/16';
 my $filter_network = $network;
 my $bypass_int = q{};
 my $bypass_ext = q{};

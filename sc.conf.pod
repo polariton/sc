@@ -16,61 +16,41 @@ The F<sc.conf> is parsed using C<AppConfig> module and has a simple C<variable
 Expansion for internal and environment variables is enabled (see AppConfig(3)
 for details).
 The file may contain extra tabs and newlines for formatting.
-Comments begin with the B<#> character and end at the end of line, like
-in shell or Perl scripts.
+Comments begin with the B<#> character and end at the end of line, like in
+shell or Perl scripts.
 
 =head1 OPTIONS
 
 =over
 
-=item B<tc>, B<iptables> and B<ipset>
+=item B<tc>
 
-Location of tc(8), iptables(8) and ipset(8) executables, respectively.
+Location of tc(8) executable.
 
 =item B<out_if>, B<in_if>
 
-Names of interfaces that will be used for shaping of output and input traffic,
-respectively.
+Names of the interfaces that will be used for shaping of output and input
+traffic, respectively.
 Possible values: interface name or "disable" keyword, which disables rule
 generation.
-
-=item B<filter_method>
-
-Traffic classification (filtering) method.
-Default value: u32.
-
-Possible values:
-
-=over 7
-
-=item B<flow>
-
-Use B<flow> classifier and ipset(8) for access control.
-This method does not allow to use IPs with the same last two octets.
-
-=item B<u32>
-
-Use B<u32> hashing filters.
-This method allows IPs with the same last two octets, but prohibits the
-addresses with the zero last octet due to limitations of tc(8) hashing filters
-syntax.
-
-=back
 
 =item B<limit_method>
 
 Rate limiting method.
-Default value: shaping.
+
+Default value: B<shaping>.
+
 Possible values: B<shaping>, B<policing>, B<hybrid>.
-Note, that B<policing> method only works with B<u32> filtering method.
-B<hybrid> method uses shaping for download and policing for upload, and all
-the rules are created on the B<in_if> interface.
-This is suitable, when shaper performs NAT on the outbound interface.
+
+The B<hybrid> method uses shaping for download and policing for upload, and
+all the rules are created on the B<in_if> interface.
+This is suitable, when NAT is performed on the outbound interface.
 
 =item B<debug>
 
 Debug modes.
-Default value: 0.
+
+Default value: B<0>.
 
 Possible values:
 
@@ -92,9 +72,9 @@ print all command lines without execution.
 
 =item B<verbose>
 
-When enabled, turns on verbose messages and disables piping of tc(8) and
-ipset(8) rules.
-Default value: 0.
+When enabled, turns on verbose messages and disables piping of tc(8) rules.
+
+Default value: B<0>.
 
 Possible values:
 
@@ -110,7 +90,7 @@ enable verbose messages (i.e. for results of `sync' command)
 
 =item B<2>
 
-disable batch loading of rules for tc(8) and ipset(8)
+disable batch loading of rules for tc(8)
 
 =item B<3>
 
@@ -121,14 +101,18 @@ do B<1> + B<2>
 =item B<quiet>
 
 Suppress output. Does not affect messages caused by C<verbose> flag.
-Default value: 0.
+
+Default value: B<0>.
+
 Possible values: boolean.
 
 =item B<colored>
 
 Colorize output using ANSI escape sequences.
 Autodetection of non-tty handles is supported.
-Default value: 1.
+
+Default value: B<1>.
+
 Possible values: boolean.
 
 =item B<joint>
@@ -138,22 +122,20 @@ a single command.
 
 =item B<network>
 
-If you use filter_method = flow, this variable defines the network for ipmap
-set.
-When filter_method = u32, it should contain the list of networks for classid
-calculation.
-This networks must cover all IPs which you are going to use in shaping rules.
-Default value: 172.16.0.0/16.
-Possible values:
-A single network with mask from 16 to 31 for B<flow> method.
-A list of networks with mask from 16 to 31 for B<u32> method.
-Total number of hosts in specified networks should not exceed the
-maximum number of child classes, e.g. 65534 (from 2 to ffff).
+This variable contains the list of networks for classid calculation.
+These networks must cover all IPs which you are going to use in shaping rules.
+
+Default value: B<10.0.0.0/16>.
+
+Possible values: a list of networks with mask from 16 to 31 method.
+
+Total number of hosts in the specified networks should not exceed the maximum
+number of child classes: 65533 (from 2 to fffd, because fffe is reserved for
+default class, and ffff is for ingress policer).
 
 =item B<filter_network>
 
-Network list for hashing filters generation. Makes sence only for B<u32>
-method.
+Network list for hashing filters generation.
 To improve the classification performance you may specify here a summarized
 network just like in case of supernetting (route aggregation).
 For example, if you have the following networks
@@ -161,11 +143,12 @@ For example, if you have the following networks
 	network = 10.0.0.0/20 10.0.253.0/24 10.0.254.0/24
 
 you should specify a single 10.0.0.0/16 network to classify traffic
-by a single hashing filer
+by a single hashing filter
 
 	filter_network = 10.0.0.0/16
 
 Default value: same as B<network> parameter.
+
 Possible values: a list of networks with mask from 16 to 31, that includes the
 networks specified in B<network> parameter.
 
@@ -174,130 +157,115 @@ networks specified in B<network> parameter.
 List of internal networks and IPs, whose traffic is transmitted without
 shaping.
 
-Default value: empty
-Possible values: space-separated list of networks with masks from 16 to 32
+Default value: B<empty>.
+
+Possible values: space-separated list of networks with masks from 16 to 32.
 
 =item B<bypass_ext>
 
 List of external networks and IPs, whose traffic is transmitted without
 shaping.
 
-Default value: empty
-Possible values: space-separated list of networks with masks from 16 to 32
+Default value: B<empty>.
+
+Possible values: space-separated list of networks with masks from 16 to 32.
 
 =item B<policer_burst_ratio>
 
 Ratio between the size of policer buffer size and bandwidth rate.
-Default value: 0.1
+
+Default value: B<0.1>.
 
 =item B<quantum>
 
 Amount of bytes a stream is allowed to dequeue before the next queue gets a
 turn.
-Default value: 1500.
+
+Default value: B<1500>.
+
 Possible values: integer numbers >= MTU of the interface.
 
 =item B<rate_unit>
 
 Default rate unit.
-Default value: kibit.
-Possible values: see sc(8).
+
+Default value: B<kibit>.
+
+Possible values: see sc(8) or tc(8) manpage.
 
 =item B<rate_ratio>
 
 Ratio between bandwidth rates in rules and in the database.
- rule_rate = db_rate * rate_ratio
+  rule_rate = db_rate * rate_ratio
 
 This coefficient is used only for B<load> and B<sync> commands.
 
-Default value: 1.0.
+Default value: B<1.0>.
+
 Possible values: any rational number.
+
+=item B<root_qdisc>
+
+Root queueing discipline.
+
+Default value: B<htb>.
+
+Possible values: B<htb> or B<hfsc>.
 
 =item B<leaf_qdisc>
 
-Leaf queueing discipline with parameters. This string will be used as a tail
-of corresponding C<tc qdisc ...> command line.
-Default value: C<pfifo limit 50>.
+Leaf queueing discipline with parameters.
+This string will be used as a tail of corresponding C<tc qdisc ...> command
+line.
+
+Default value: B<pfifo limit 100>.
+
 Possible values: all classless qdiscs supported by tc(8).
-
-=item B<set_name>
-
-Name of set with allowed IPs.
-Default value: pass.
-Possible values: ipset-accepted string.
-
-=item B<set_type>
-
-Type of set.
-Default value: ipmap.
-
-Possible values:
-
-=over 8
-
-=item B<ipmap>
-
-for IPs from one /16 network defined by C<network> parameter (very fast and
-memory cheap)
-
-=item B<iphash>
-
-for IPs from arbitrary /16 networks
-
-=back
-
-=item B<set_size>
-
-Size of IP hash for ipset(8).
-Default value: 65536.
-Possible values: from 1024 to 65536.
-
-=item B<chain>
-
-Name of iptables(8) chain that will contain rules for shaped IPs.
-Default value: FORWARD.
-For names other than FORWARD the new chain will be created and attached to
-FORWARD chain.
 
 =item B<db_host>
 
 Database host.
-Default value: 127.0.0.1.
+
+Default value: B<127.0.0.1>.
+
 Possible values: IP-address or domain name.
 
 =item B<db_driver>
 
 Database driver.
-Default value: SQLite.
+
+Default value: B<SQLite>.
+
 Possible values: all database drivers supported by Perl DBI module.
 See output of C<sc help> command for the list of available drivers.
 
 =item B<db_user>
 
 Username to use when connecting to database.
-Default value: user.
+
+Default value: B<user>.
+
 Possible values: depends on database server.
 
 =item B<db_pass>
 
 The password to use when connecting to database. Remember that specifying a
 password on the command line is insecure.
-Default value: password.
+
+Default value: B<password>.
+
 Possible values: arbitrary string.
 
 =item B<db_name>
 
 Database name to use.
-Default value: sc.db.
+
+Default value: B<sc.db>.
+
 Possible values: arbibrary string (should be a valid filename in case of
 SQLite driver).
 
 =item B<Database queries>
-
-Default values of queries are used for handling SQLite database
-F</etc/sc/sc.db>.
-
-List of queries:
 
 =over 16
 
@@ -315,28 +283,29 @@ Select data for one IP.
 
 =item B<query_add>
 
-add new entry.
+add a new entry.
 
 =item B<query_del>
 
-delete existing entry.
+delete an existing entry.
 
 =item B<query_change>
 
-modify existing entry.
+modify an existing entry.
 
 =back
 
 =item B<syslog>
 
 Output errors and warnings to syslog.
-Default value: 1.
+
+Default value: B<1>.
+
 Possible values: boolean.
 
 =item B<syslog_options>
 
-Syslog options.
-Default value: <empty string>.
+Default value: B<<empty string>>.
 
 Possible values (comma-separated):
 
@@ -363,15 +332,18 @@ include PID with each message
 
 =item B<syslog_facility>
 
-syslog facility.
-Default value: user.
+Default value: B<user>.
+
 Possible values: see Sys::Syslog(3), section C<Facilities>.
 
 =back
 
 =head1 SEE ALSO
 
-sc(8), tc(8), iptables(8), ipset(8), AppConfig(3), Sys::Syslog(3).
+sc(8), tc(8), tc-htb(8), tc-hfsc(8), tc-u32(8), tc-pfifo(8),
+AppConfig(3), Sys::Syslog(3).
+http://lartc.org/howto/lartc.adv-filter.hashing.html,
+http://ace-host.stuart.id.au/russell/files/tc/doc/cls_u32.txt.
 
 =head1 AUTHOR
 

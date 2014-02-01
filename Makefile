@@ -1,11 +1,13 @@
 PROG=sc
-VERSION=1.4.0
+VERSION=1.5.0
 ARCH=$(PROG)-$(VERSION).tar.bz2
+SERVICE=$(PROG)
 
-DESTDIR?=/usr/local/sbin
-MANDIR?=/usr/local/share/man
+PREFIX?=/usr/local
+SBINDIR?=$(PREFIX)/sbin
+MANDIR?=$(PREFIX)/share/man
 INITDIR?=/etc/init.d
-CFGDIR=/etc/sc
+CONFDIR?=/etc/sc
 
 CLFILES?=sc.8 sc.conf.5 $(ARCH) *.batch
 
@@ -29,19 +31,17 @@ help:
 	 echo "  uninstall  uninstall program"
 
 install: sc sc.init sc.conf.5 sc.8 sc.conf
-	install -D -m 755 $(PROG) $(DESTDIR)
-	install -D -m 755 $(PROG).init $(INITDIR)/$(PROG)
-	install -D -m 644 sc.8 $(MANDIR)/man8/sc.8
-	install -D -m 644 sc.conf.5 $(MANDIR)/man5/sc.conf.5
-	install -D -m 644 sc.conf $(CFGDIR)/sc.conf.default
+	install -D -m 755 $(PROG) $(DESTDIR)$(SBINDIR)
+	install -D -m 644 sc.8 $(DESTDIR)$(MANDIR)/man8/sc.8
+	install -D -m 644 sc.conf.5 $(DESTDIR)$(MANDIR)/man5/sc.conf.5
+	install -D -m 755 $(PROG).init $(DESTDIR)$(INITDIR)/$(SERVICE)
+	install -D -m 644 sc.conf $(DESTDIR)$(CONFDIR)/sc.conf.default
 
 uninstall:
-	-rm $(DESTDIR)/sc
-	-rm $(INITDIR)/sc
-	-rm $(MANDIR)/man8/sc.8
-	-rm $(MANDIR)/man5/sc.conf.5
-	-[ -f $(MANDIR)/man8/sc.8.gz ] && rm $(MANDIR)/man8/sc.8.gz
-	-[ -f $(MANDIR)/man5/sc.conf.5.gz ] && rm $(MANDIR)/man5/sc.conf.5.gz
+	-rm $(DESTDIR)$(SBINDIR)/$(PROG)
+	-rm $(DESTDIR)$(INITDIR)/$(SERVICE)
+	-rm $(DESTDIR)$(MANDIR)/man8/sc.8
+	-rm $(DESTDIR)$(MANDIR)/man5/sc.conf.5
 
 reinstall: uninstall install
 

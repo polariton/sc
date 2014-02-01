@@ -122,7 +122,7 @@ my %cmdd = (
 	'list|ls' => {
 		'handler' => \&cmd_list,
 		'arg'     => '[ip] ...',
-		'desc'    => 'list current rules in human-readable form',
+		'desc'    => 'list current rules',
 		'priv'    => 1,
 	},
 	'help' => {
@@ -148,7 +148,7 @@ my %cmdd = (
 	'ratecvt' => {
 		'handler' => \&cmd_ratecvt,
 		'arg'     => '<rate> <unit>',
-		'desc'    => 'convert rate unit',
+		'desc'    => 'convert rate to specified units',
 		'priv'    => 0,
 	},
 	'reload|restart' => {
@@ -198,7 +198,7 @@ my %cmdd = (
 	'dbchange|dbmod' => {
 		'handler' => \&cmd_dbchange,
 		'arg'     => '<ip> <rate>',
-		'desc'    => 'change database entry',
+		'desc'    => 'change rate in the database',
 		'priv'    => 0,
 	},
 	'dbcreate' => {

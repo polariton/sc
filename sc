@@ -16,7 +16,6 @@ use POSIX qw( isatty );
 #
 
 my $cfg_file = '/etc/sc/sc.conf';
-
 my $tc = '/sbin/tc';
 
 use constant {
@@ -63,6 +62,7 @@ my $quantum = '1500';
 my $rate_unit = 'kibit';
 my $rate_ratio = 1.0;
 my $default_cid = 'fffe';
+my $ingress_cid = 'ffff';
 my $root_qdisc = 'htb';
 my $leaf_qdisc = 'pfifo limit 50';
 my $network = '10.0.0.0/16';
@@ -308,7 +308,7 @@ my $sys;
 # pref values for different types of tc filters
 my $pref_bypass = 9; # bypassed networks
 my $pref_hash = 10; # hashing filters
-my $pref_leaf = 20; # hash table entries
+my $pref_leaf = 20; # leaf hashing filters
 my $pref_default = 30; # default rule
 
 my $ip_re = '\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}';
@@ -350,7 +350,7 @@ else {
 	log_carp("unable to read configuration file $cfg_file");
 }
 
-# override values that we read from file by the command line parameters
+# override values that we have read from file by the command line parameters
 GetOptions(%optd) or exit E_PARAM;
 
 if ($batch) {
@@ -374,6 +374,8 @@ else {
 }
 
 exit $RET;
+
+## end of main routine
 
 sub main
 {
@@ -492,8 +494,8 @@ sub set_ptrs
 {
 	if ($debug == DEBUG_OFF) {
 		$sys = ($quiet)
-		? sub { return system "@_ >/dev/null 2>&1"; }
-		: sub { return system @_; };
+		     ? sub { return system "@_ >/dev/null 2>&1"; }
+		     : sub { return system @_; };
 	}
 	elsif ($debug == DEBUG_ON) {
 		$sys = sub {
@@ -557,7 +559,7 @@ sub set_ptrs
 		$dev_del_class = \&hfsc_dev_del_class;
 	}
 	else {
-		log_error("\'$root_qdisc\' is unsupported root qdisc");
+		log_croak("\'$root_qdisc\' is unsupported root qdisc");
 	}
 
 	return;
@@ -689,7 +691,7 @@ sub is_rate
 			}
 		}
 		else {
-			$result = $num . $rate_unit;
+			$result = $num.$rate_unit;
 		}
 	}
 	else {
@@ -1234,8 +1236,9 @@ sub shaper_load
 	my $ret = E_OK;
 	my $leaf_regexp;
 	my $dev;
-	$dev = $i_if if $i_if_enabled;
+
 	$dev = $o_if if $o_if_enabled;
+	$dev = $i_if if $i_if_enabled;
 
 	open my $TCFH, '-|', "$tc -p -iec filter show dev $dev"
 		or log_croak("unable to open pipe for $tc");
@@ -1261,7 +1264,7 @@ sub shaper_load
 		$leaf_regexp = 'leaf\ ([0-9a-f]+):\ .*\ m2\ (\w+)';
 	}
 	else {
-		log_error("$root_qdisc is unsupported root qdisc");
+		log_croak("\'$root_qdisc\' is unsupported root qdisc");
 	}
 	foreach (@tcout) {
 		if (($cid, $rate) = /$leaf_regexp/xms) {
@@ -1277,8 +1280,9 @@ sub shaper_show
 {
 	my @ips = @_;
 	my $dev;
-	$dev = $i_if if $i_if_enabled;
+
 	$dev = $o_if if $o_if_enabled;
+	$dev = $i_if if $i_if_enabled;
 
 	if (nonempty($ips[0])) {
 		foreach my $ip (@ips) {
@@ -1304,9 +1308,9 @@ sub shaper_show
 		}
 	}
 	else {
-		print BOLD, "Input filters [$i_if]:\n", RESET;
+		print BOLD, "\nInput filters [$i_if]:\n", RESET;
 		system "$tc -p -s filter show dev $i_if" if $i_if_enabled;
-		print BOLD, "Output filters [$o_if]:\n", RESET;
+		print BOLD, "\nOutput filters [$o_if]:\n", RESET;
 		system "$tc -p -s filter show dev $o_if" if $o_if_enabled;
 		print BOLD, "\nInput classes [$i_if]:\n", RESET;
 		system "$tc -i -s -d class show dev $i_if" if $i_if_enabled;
@@ -1363,8 +1367,8 @@ sub policer_dev_init
 {
 	my ($dev, $match, $offset) = @_;
 
-	$TC->("qdisc add dev $dev handle ffff: ingress");
-	$TC->("filter add dev $dev parent ffff: protocol ip pref $pref_hash u32");
+	$TC->("qdisc add dev $dev handle $ingress_cid: ingress");
+	$TC->("filter add dev $dev parent $ingress_cid: protocol ip pref $pref_hash u32");
 	foreach my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
 	  keys %filter_nets) {
 		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
@@ -1373,11 +1377,11 @@ sub policer_dev_init
 		if ($netmask >= 24 && $netmask < 31) {
 			my ($div1, $hmask1) = u32_div_hmask($netmask, 4);
 			$TC->(
-				"filter add dev $dev parent ffff: protocol ip ".
+				"filter add dev $dev parent $ingress_cid: protocol ip ".
 				"pref $pref_hash handle $ht1: u32 divisor $div1"
 			);
 			$TC->(
-				"filter add dev $dev parent ffff: protocol ip ".
+				"filter add dev $dev parent $ingress_cid: protocol ip ".
 				"pref $pref_hash u32 ht 800:: match ip $match $net ".
 				"hashkey mask $hmask1 at $offset link $ht1:"
 			);
@@ -1388,11 +1392,11 @@ sub policer_dev_init
 
 			# parent filter
 			$TC->(
-				"filter add dev $dev parent ffff: protocol ip ".
+				"filter add dev $dev parent $ingress_cid: protocol ip ".
 				"pref $pref_hash handle $ht1: u32 divisor $div1"
 			);
 			$TC->(
-				"filter add dev $dev parent ffff: protocol ip ".
+				"filter add dev $dev parent $ingress_cid: protocol ip ".
 				"pref $pref_hash u32 ht 800:: match ip $match $net ".
 				"hashkey mask $hmask1 at $offset link $ht1:"
 			);
@@ -1406,11 +1410,11 @@ sub policer_dev_init
 				my $net2 = "$oct[0].$oct[1].$j.0/24";
 
 				$TC->(
-					"filter add dev $dev parent ffff: protocol ip ".
+					"filter add dev $dev parent $ingress_cid: protocol ip ".
 					"pref $pref_hash handle $ht2: u32 divisor $div2"
 				);
 				$TC->(
-					"filter add dev $dev parent ffff: protocol ip ".
+					"filter add dev $dev parent $ingress_cid: protocol ip ".
 					"pref $pref_hash u32 ht $ht1:$key: ".
 					"match ip $match $net2 ".
 					"hashkey mask $hmask2 at $offset link $ht2:"
@@ -1424,8 +1428,9 @@ sub policer_dev_init
 
 	# block all other traffic
 	$TC->(
-		"filter add dev $dev parent ffff:0 protocol ip pref $pref_default ".
-		'u32 match u32 0 0 at 0 police mtu 1 action drop'
+		"filter add dev $dev parent $ingress_cid: protocol ip ".
+		"pref $pref_default u32 match u32 0 0 at 0 ".
+		"police mtu 1 action drop"
 	);
 	return $?;
 }
@@ -1451,9 +1456,9 @@ sub policer_dev_add
 	my $policer_burst = round($policer_burst_ratio * $rate_byte) . 'b';
 
 	$TC->(
-		"filter replace dev $dev parent ffff: pref $pref_leaf ".
+		"filter replace dev $dev parent $ingress_cid: pref $pref_leaf ".
 		"handle $ht:$key:800 u32 ht $ht:$key: match $match ".
-		"police rate $rate burst $policer_burst drop flowid ffff:"
+		"police rate $rate burst $policer_burst drop flowid $ingress_cid:"
 	);
 	return $?;
 }
@@ -1472,7 +1477,7 @@ sub policer_dev_del
 	my ($dev, $ht, $key) = @_;
 
 	$TC->(
-		"filter del dev $dev parent ffff: pref $pref_hash ".
+		"filter del dev $dev parent $ingress_cid: pref $pref_hash ".
 		"handle $ht:$key:800 u32"
 	);
 	return $?;
@@ -1483,10 +1488,11 @@ sub policer_load
 	my ($ip, $cid, $rate);
 	my $ret = E_OK;
 	my $dev;
-	$dev = $i_if if $i_if_enabled;
-	$dev = $o_if if $o_if_enabled;
 
-	open my $TCFH, '-|', "$tc -p -iec filter show dev $dev parent ffff:"
+	$dev = $o_if if $o_if_enabled;
+	$dev = $i_if if $i_if_enabled;
+
+	open my $TCFH, '-|', "$tc -p -iec filter show dev $dev parent $ingress_cid:"
 		or log_croak("unable to open pipe for $tc");
 	my @tcout = <$TCFH>;
 	close $TCFH or log_carp("unable to close pipe for $tc");
@@ -1517,12 +1523,12 @@ sub policer_show
 	}
 	else {
 		if ($i_if_enabled) {
-			print BOLD, "POLICING FILTERS [$i_if]:\n", RESET;
-			system "$tc -p -s filter show dev $i_if parent ffff:";
+			print BOLD, "\nPOLICING FILTERS [$i_if]:\n", RESET;
+			system "$tc -p -s filter show dev $i_if parent $ingress_cid:";
 		}
 		if ($o_if_enabled) {
-			print BOLD, "POLICING FILTERS [$o_if]:\n", RESET;
-			system "$tc -p -s filter show dev $o_if parent ffff:";
+			print BOLD, "\nPOLICING FILTERS [$o_if]:\n", RESET;
+			system "$tc -p -s filter show dev $o_if parent $ingress_cid:";
 		}
 		return $?;
 	}
@@ -1535,7 +1541,7 @@ sub policer_dev_ip_show
 	my @tcout;
 
 	open my $TCFH, '-|',
-		"$tc -p -s -iec filter show dev $dev parent ffff:"
+		"$tc -p -s -iec filter show dev $dev parent $ingress_cid:"
 		or log_croak("unable to open pipe for $tc");
 	@tcout = <$TCFH>;
 	close $TCFH or log_carp("unable to close pipe for $tc");
@@ -1554,8 +1560,10 @@ sub policer_dev_ip_show
 
 sub policer_reset
 {
-	$sys->("$tc qdisc del dev $o_if handle ffff: ingress") if $o_if_enabled;
-	$sys->("$tc qdisc del dev $i_if handle ffff: ingress") if $i_if_enabled;
+	$sys->("$tc qdisc del dev $o_if handle $ingress_cid: ingress")
+		if $o_if_enabled;
+	$sys->("$tc qdisc del dev $i_if handle $ingress_cid: ingress")
+		if $i_if_enabled;
 	return $?;
 }
 
@@ -1610,7 +1618,7 @@ sub hybrid_show
 			my @tcout;
 
 			open my $TCFH, '-|',
-				"$tc -p -s -iec filter show dev $i_if parent ffff:"
+				"$tc -p -s -iec filter show dev $i_if parent $ingress_cid:"
 					or log_croak("unable to open pipe for $tc");
 			@tcout = <$TCFH>;
 			close $TCFH or log_carp("unable to close pipe for $tc");
@@ -1659,9 +1667,9 @@ sub hybrid_show
 		}
 	}
 	else {
-		print BOLD, "POLICING FILTERS [$i_if]:\n", RESET;
-		system "$tc -p -s filter show dev $i_if parent ffff:";
-		print BOLD, "SHAPING FILTERS [$i_if]:\n", RESET;
+		print BOLD, "\nPOLICING FILTERS [$i_if]:\n", RESET;
+		system "$tc -p -s filter show dev $i_if parent $ingress_cid:";
+		print BOLD, "\nSHAPING FILTERS [$i_if]:\n", RESET;
 		system "$tc -p -s filter show dev $i_if";
 		print BOLD, "\nSHAPING CLASSES [$i_if]:\n", RESET;
 		system "$tc -i -s -d class show dev $i_if";
@@ -1674,7 +1682,7 @@ sub hybrid_show
 
 sub hybrid_reset
 {
-	$sys->("$tc qdisc del dev $i_if handle ffff: ingress");
+	$sys->("$tc qdisc del dev $i_if handle $ingress_cid: ingress");
 	$sys->("$tc qdisc del dev $i_if root handle 1: $root_qdisc");
 	return $?;
 }
@@ -1756,7 +1764,7 @@ sub cmd_load
 
 	$rul_batch_start->();
 	$ret = $rul_init->();
-	db_load();
+	$ret = db_load();
 	foreach my $cid (keys %db_data) {
 		my $r = round($rate_ratio*$db_data{$cid}{'rate'});
 		$rul_add->($db_data{$cid}{'ip'}, $cid, "$r$rate_unit");
@@ -1864,21 +1872,7 @@ sub cmd_status
 				return E_OK;
 			}
 		}
-		log_warn('root qdisc found but there is no child queues');
-	}
-	elsif ($rqdisc eq 'ingress') {
-		open $PIPE, '-|', "$tc -p filter show dev $i_if parent ffff:"
-			or log_croak("unable to open pipe for $tc");
-		@out = <$PIPE>;
-		close $PIPE or log_croak("unable to close pipe for $tc");
-		foreach my $s (@out) {
-			if ($s =~ /match\ IP.*\/32/xms) {
-				log_warn('shaping rules were successfully created');
-				return E_OK;
-			}
-		}
-		log_warn('ingress qdisc found but there is no filters for IPs');
-		return E_UNDEF;
+		log_warn('root qdisc found, but there is no child queues');
 	}
 	return E_UNDEF;
 }
@@ -2049,11 +2043,7 @@ B<sc> [options] B<command> [ip] [rate]
 =head1 DESCRIPTION
 
 sc(8) is a command-line tool intended to simplify administration of traffic
-shaper for Internet service providers. ISP's usually work with the following
-configuration: every customer has it's own IP-address and fixed bandwidth.
-sc(8) works as a wrapper for tc(8) abstracting you from complexity of its
-rules, so you can think only about IPs and bandwidth rates and almost forget
-about classid's, qdiscs, filters and other stuff.
+shaper for Internet service providers.
 
 =head2 Main features
 
@@ -2259,7 +2249,7 @@ do B<1> + B<2>
 
 =item B<-q>, B<--quiet>
 
-Suppress output of error messages from external command-line tools like tc(8).
+Suppress output of error messages from tc(8).
 
 =item B<-c>, B<--colored>
 
@@ -2276,8 +2266,7 @@ Batch mode. Commands and options will be read from STDIN.
 
 =item B<-N, --network> "net/mask ..."
 
-Networks for classid calculation or for C<ipmap> set (see sc.conf(5) for
-details).
+Networks for IP to classid mapping (see sc.conf(5) for details).
 
 =item B<--filter_network> "net/mask ..."
 
@@ -2309,25 +2298,29 @@ Default rate unit
 Ratio between bandwidth rates in rules and in the database.
 Used only for B<load> and B<sync> commands.
 
-=item B<-l>, B<--leaf_qdisc> string
+=item B<-R>, B<--root_qdisc> string
 
-Leaf qdisc and parameters
+Root qdisc (C<htb> or C<hfsc>).
+
+=item B<-L>, B<--leaf_qdisc> string
+
+Leaf qdisc and parameters.
 
 =item B<--db_driver> name
 
-Database driver
+Database driver.
 
 =item B<--db_host> host:port
 
-Database server address or hostname
+Database server address or hostname.
 
 =item B<--db_name> name
 
-Database name to use
+Database name to use.
 
 =item B<--db_user> name
 
-Database username
+Database username.
 
 =item B<--db_pass> password
 
@@ -2335,7 +2328,7 @@ Database password. Remember that it is insecure to specify password here.
 
 =item B<-S>, B<--syslog>
 
-Send errors and warnings to syslog
+Send errors and warnings to syslog.
 
 =back
 
@@ -2509,8 +2502,7 @@ filters is limited by 0x799.
 
 =head1 SEE ALSO
 
-sc.conf(5), tc(8), tc-htb(8), tc-hfsc(8), tc-u32(8),
-Getopt::Long(3), AppConfig(3),
+sc.conf(5), tc(8), tc-htb(8), tc-hfsc(8), Getopt::Long(3), AppConfig(3),
 http://lartc.org/howto/lartc.adv-filter.hashing.html,
 http://ace-host.stuart.id.au/russell/files/tc/doc/cls_u32.txt.
 

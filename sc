@@ -777,7 +777,8 @@ sub db_connect
 
 sub db_load
 {
-	my $dbh = db_connect();
+	my $ret = E_OK;
+	my $dbh = db_connect() or return E_UNDEF;
 	my $sth = $dbh->prepare($query_load);
 	$sth->execute();
 	my ($intip, $rate, $ip, $cid);
@@ -796,7 +797,7 @@ sub db_load
 	$sth->finish();
 	undef $sth;
 	$dbh->disconnect();
-	return $dbh;
+	return $ret;
 }
 
 #
@@ -1731,7 +1732,7 @@ sub cmd_change
 	arg_check(\&is_ip, $ip, 'IP');
 	$rate = arg_check(\&is_rate, $rate, 'rate');
 	my $cid = ip_classid($ip);
-	return $rul_change->($ip, $cid, $rate);
+	return $rul_change->($cid, $rate, $rate);
 }
 
 sub cmd_list
@@ -1818,7 +1819,7 @@ sub cmd_sync
 		if ($rul_rate ne $db_rate) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;
-			$rul_change->($ip, $dcid, $db_rate);
+			$rul_change->($dcid, $db_rate, $db_rate);
 			$chg++;
 		}
 		else {

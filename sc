@@ -1359,8 +1359,8 @@ sub shaper_reset
 
 sub policer_init
 {
-	policer_dev_init($o_if, 'dst', 16);
-	policer_dev_init($i_if, 'src', 12);
+	policer_dev_init($o_if, 'dst', 16) if $i_if_enabled;
+	policer_dev_init($i_if, 'src', 12) if $o_if_enabled;
 	return $?;
 }
 

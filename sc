@@ -1204,8 +1204,8 @@ sub shaper_change
 	my $i_ceil = $i_rate;
 	my $o_ceil = $o_rate;
 
-	$dev_change_class->($i_if, $cid, $i_rate, $i_ceil);
-	$dev_change_class->($o_if, $cid, $o_rate, $o_ceil);
+	$dev_change_class->($i_if, $cid, $i_rate, $i_ceil) if $i_if_enabled;
+	$dev_change_class->($o_if, $cid, $o_rate, $o_ceil) if $o_if_enabled;
 	return $?;
 }
 
@@ -1838,9 +1838,13 @@ sub cmd_show
 
 sub cmd_status
 {
+	my $dev;
+	$dev = $o_if if $o_if_enabled;
+	$dev = $i_if if $i_if_enabled;
+
 	my @out;
 	my $PIPE;
-	open $PIPE, '-|', "$tc qdisc show dev $i_if"
+	open $PIPE, '-|', "$tc qdisc show dev $dev"
 		or log_croak("unable to open pipe for $tc");
 	@out = <$PIPE>;
 	close $PIPE or log_croak("unable to close pipe for $tc");

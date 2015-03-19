@@ -82,7 +82,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.5.3';
+my $VERSION = '1.5.4';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -1200,12 +1200,11 @@ sub shaper_dev_add
 
 sub shaper_change
 {
-	my ($cid, $i_rate, $o_rate) = @_;
-	my $i_ceil = $i_rate;
-	my $o_ceil = $o_rate;
+	my ($ip, $cid, $rate) = @_;
+	my $ceil = $rate;
 
-	$dev_change_class->($i_if, $cid, $i_rate, $i_ceil) if $i_if_enabled;
-	$dev_change_class->($o_if, $cid, $o_rate, $o_ceil) if $o_if_enabled;
+	$dev_change_class->($i_if, $cid, $rate, $ceil) if $i_if_enabled;
+	$dev_change_class->($o_if, $cid, $rate, $ceil) if $o_if_enabled;
 	return $?;
 }
 
@@ -1732,7 +1731,7 @@ sub cmd_change
 	arg_check(\&is_ip, $ip, 'IP');
 	$rate = arg_check(\&is_rate, $rate, 'rate');
 	my $cid = ip_classid($ip);
-	return $rul_change->($cid, $rate, $rate);
+	return $rul_change->($ip, $cid, $rate);
 }
 
 sub cmd_list
@@ -1819,7 +1818,7 @@ sub cmd_sync
 		if ($rul_rate ne $db_rate) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;
-			$rul_change->($dcid, $db_rate, $db_rate);
+			$rul_change->($ip, $dcid, $db_rate);
 			$chg++;
 		}
 		else {

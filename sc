@@ -1358,8 +1358,8 @@ sub shaper_reset
 
 sub policer_init
 {
-	policer_dev_init($o_if, 'dst', 16) if $i_if_enabled;
-	policer_dev_init($i_if, 'src', 12) if $o_if_enabled;
+	policer_dev_init($o_if, 'dst', 16) if $o_if_enabled;
+	policer_dev_init($i_if, 'src', 12) if $i_if_enabled;
 	return $?;
 }
 
@@ -1549,8 +1549,8 @@ sub policer_dev_ip_show
 		chomp $tcout[$i];
 		if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
 			print BOLD, "$type filter [$dev]:\n", RESET;
-			for my $j ($i-1 .. $i+1) {
-				print "$tcout[$j]\n";
+			for my $j ($i-1 .. $i+4) {
+				print "$tcout[$j]";
 			}
 			last;
 		}

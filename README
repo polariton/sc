@@ -65,14 +65,14 @@ Configuration and basic usage
 1. Database settings
 
 By default, sc(8) stores it's data in the SQLite database /etc/sc/sc.db. It
-can also take data from any other DBI-compatible database servers, like MySQL,
-PostgreSQL or Firebird, and even from CSV files.
+can also load data from any other DBI-compatible database servers, like MySQL,
+PostgreSQL, and even from CSV files.
 
-If you plan to load the data from a remote database, you must install the
-corresponding Perl DBD module, and configure db_* and query_* parameters in
-sc.conf. By default, the first column contains an IP-addresses in integer
-representation, and the second column provides the integer bandwith rate
-values (see "query_create" parameter in sc.conf).
+If you plan to load the data from a remote database server, you must install
+the corresponding Perl DBD module, and configure parameters of [db] and
+[query] sections in sc.conf. By default, the first column contains an
+IP-addresses in integer representation, and the second column provides the
+integer bandwith rate values (see "create" parameter in sc.conf).
 
 Rate units are defined by "rate_unit" parameter in sc.conf or by similar
 command line option. Default rate unit is 1 Kibit/s = 1024 bit/s.
@@ -93,14 +93,10 @@ When you configured the database parameters, you can generate the shaping
 rules with the following command:
 
 	# sc start
-or
-	# sc load
 
-To completely delete all the shaping rules, use
+To completely delete all the shaping rules, type
 
 	# sc stop
-or
-	# sc reset
 
 3. Periodic synchronization of rules with database
 
@@ -114,7 +110,7 @@ creates the cron(8) task which performs the synchronization of the rules every
 4. Night rates and similar stuff
 
 If you want to have the rates, which differ from stored in the database, you
-should set the rate_ratio variable in the sc.conf file with the suitable cron
+should set the rate_ratio parameter in the sc.conf file with the suitable cron
 instruction. There is no need to reload the rules manually, if you use the
 task for synchronization every 10 minutes from the example above.
 
@@ -128,14 +124,15 @@ rates", when you set rate_ratio = 1.5 at 02:00 and change it back to 1.0 at
 5. Syslog
 
 Shaper Control Tool can log errors and warnings through syslog. To enable this
-feature set "syslog" option to 1 in sc.conf.
+feature set "syslog_enabled" option to 1 in sc.conf.
 
 Troubleshooting
 ===============
 
 If you experience any problems and get the errors from tc(8) or Linux kernel,
-you should repeat the command with enabled debugging flag "-d 1" and disabled
-batch rule loading "-v 2". See manpage sc(8) for details. Example:
+you should repeat the command with enabled debugging "-d 1" and disabled
+batch rule loading "-v 2". See manpage sc(8) for details.
 
+Example:
 	# sc -d 1 -v 2 start
 

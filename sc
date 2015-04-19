@@ -64,16 +64,19 @@ my $rate_ratio = 1.0;
 my $default_cid = 'fffe';
 my $ingress_cid = 'ffff';
 my $root_qdisc = 'htb';
-my $leaf_qdisc = 'pfifo limit 50';
+my $leaf_qdisc = 'pfifo limit 100';
 my $network = '10.0.0.0/16';
 my $filter_network = $network;
+my $default_policy = 'block';
+my $default_rate = '1gibit';
+my $default_ceil = '1gibit';
 my $bypass_int = q{};
 my $bypass_ext = q{};
 my $limit_method = 'shaping';
 
 my (%filter_nets, %class_nets);
 
-my $syslog = 0;
+my $syslog_enable = 0;
 my $syslog_options = q{};
 my $syslog_facility = 'user';
 
@@ -82,7 +85,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.5.4';
+my $VERSION = '1.5.5';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -211,7 +214,7 @@ my %cmdd = (
 # pointers to functions for rule handling
 my ($rul_batch_start, $rul_batch_stop, $rul_init, $rul_add, $rul_del,
 	$rul_change, $rul_load, $rul_show, $rul_reset,
-	$dev_add_class, $dev_change_class, $dev_del_class);
+	$shaper_dev_add_class, $shaper_dev_change_class);
 
 # rate unit transformation coefficients
 my %units = (
@@ -273,6 +276,9 @@ my %optd = (
 	'N|network=s'           => \$network,
 	'filter_network=s'      => \$filter_network,
 	'limit_method=s'        => \$limit_method,
+	'default_policy=s'      => \$default_policy,
+	'default_rate=s'        => \$default_rate,
+	'default_ceil=s'        => \$default_ceil,
 	'bypass_int=s'          => \$bypass_int,
 	'bypass_ext=s'          => \$bypass_ext,
 	'policer_burst_ratio=s' => \$policer_burst_ratio,
@@ -292,8 +298,8 @@ my %optd = (
 	'query_add=s'           => \$query_add,
 	'query_del=s'           => \$query_del,
 	'query_change=s'        => \$query_change,
-	'S|syslog'              => \$syslog,
-	'syslog_options'        => \$syslog_options,
+	'S|syslog_enable!'      => \$syslog_enable,
+	'syslog_options=s'      => \$syslog_options,
 	'syslog_facility=s'     => \$syslog_facility,
 );
 
@@ -343,7 +349,8 @@ if (-T $cfg_file) {
 	# parse configuration file
 	for my $i (0..$#cargs) {
 		${ $optd{$args[$i]} } = $cfg->get( $cargs[$i] );
-		print "$cargs[$i] = ${ $optd{$args[$i]} }\n" if $verbose;
+		print "$cargs[$i] = ${ $optd{$args[$i]} }\n"
+			if $verbose & VERB_NOBATCH;
 	}
 }
 else {
@@ -549,14 +556,12 @@ sub set_ptrs
 	}
 
 	if ($root_qdisc eq 'htb') {
-		$dev_add_class = \&htb_dev_add_class;
-		$dev_change_class = \&htb_dev_change_class;
-		$dev_del_class = \&htb_dev_del_class;
+		$shaper_dev_add_class = \&htb_dev_add_class;
+		$shaper_dev_change_class = \&htb_dev_change_class;
 	}
 	elsif ($root_qdisc eq 'hfsc') {
-		$dev_add_class = \&hfsc_dev_add_class;
-		$dev_change_class = \&hfsc_dev_change_class;
-		$dev_del_class = \&hfsc_dev_del_class;
+		$shaper_dev_add_class = \&hfsc_dev_add_class;
+		$shaper_dev_change_class = \&hfsc_dev_change_class;
 	}
 	else {
 		log_croak("\'$root_qdisc\' is unsupported root qdisc");
@@ -621,7 +626,7 @@ sub log_carp
 {
 	my ($msg) = @_;
 
-	log_syslog('warn', $msg) if $syslog;
+	log_syslog('warn', $msg) if $syslog_enable;
 	carp "$PROG: $msg" if !$quiet;
 	return $!;
 }
@@ -630,7 +635,7 @@ sub log_croak
 {
 	my ($msg) = @_;
 
-	log_syslog('err', $msg) if $syslog;
+	log_syslog('err', $msg) if $syslog_enable;
 	if ($quiet) {
 		exit $!;
 	}
@@ -643,7 +648,7 @@ sub log_warn
 {
 	my ($msg) = @_;
 
-	log_syslog('warn', $msg) if $syslog;
+	log_syslog('warn', $msg) if $syslog_enable;
 	print {*STDERR} "$PROG: $msg\n" if !$quiet;
 	return $!;
 }
@@ -676,6 +681,7 @@ sub is_ip
 sub is_rate
 {
 	my ($rate) = @_;
+	return 0 if !defined $rate;
 	chomp $rate;
 	my $result = 0;
 	my ($num, $unit);
@@ -764,6 +770,14 @@ sub db_connect
 		$dbh = DBI->connect(
 			"DBI:SQLite:${db_name}",
 			$db_user, $db_pass, { RaiseError => 1, AutoCommit => 1 }
+		);
+	}
+	elsif ($db_driver =~ /csv/ixms) {
+		$dbh = DBI->connect(
+			"DBI:CSV:",
+			$db_user, $db_pass, {
+				f_dir => $db_name, f_ext => ".csv/r", csv_sep_char => ";",
+				RaiseError => 1, PrintError => 1, AutoCommit => 1 }
 		);
 	}
 	else {
@@ -927,78 +941,6 @@ sub bypass_init
 	return $?;
 }
 
-# HTB
-
-sub htb_dev_add_class
-{
-	my ($dev, $cid, $rate, $ceil) = @_;
-
-	$TC->(
-		"class replace dev $dev parent 1: classid 1:$cid htb ".
-		"rate $rate ceil $ceil quantum $quantum"
-	);
-	$TC->(
-		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
-	);
-	return $?;
-}
-
-sub htb_dev_change_class
-{
-	my ($dev, $cid, $rate, $ceil) = @_;
-
-	$TC->(
-		"class change dev $dev parent 1:0 classid 1:$cid htb ".
-		"rate $rate ceil $ceil quantum $quantum"
-	);
-	return $?;
-}
-
-sub htb_dev_del_class
-{
-	my ($dev, $cid) = @_;
-
-	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
-	$TC->("class del dev $dev parent 1: classid 1:$cid");
-	return $?;
-}
-
-# HFSC
-
-sub hfsc_dev_add_class
-{
-	my ($dev, $cid, $rate, $ceil) = @_;
-
-	$TC->(
-		"class replace dev $dev parent 1: classid 1:$cid hfsc ".
-		"sc rate $rate ul rate $ceil"
-	);
-	$TC->(
-		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
-	);
-	return $?;
-}
-
-sub hfsc_dev_change_class
-{
-	my ($dev, $cid, $rate, $ceil) = @_;
-
-	$TC->(
-		"class change dev $dev parent 1: classid 1:$cid hfsc ".
-		"sc rate $rate ul rate $ceil"
-	);
-	return $?;
-}
-
-sub hfsc_dev_del_class
-{
-	my ($dev, $cid) = @_;
-
-	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
-	$TC->("class del dev $dev parent 1: classid 1:$cid");
-	return $?;
-}
-
 #
 # u32 hashing filters functions
 #
@@ -1091,13 +1033,14 @@ sub u32_div_hmask
 	return ($div, $hmask);
 }
 
-# shaping
+# shaping regime
 
 sub shaper_init
 {
-	shaper_dev_init($i_if, 'dst', 16) if $i_if_enabled;
-	shaper_dev_init($o_if, 'src', 12) if $o_if_enabled;
-	return $?;
+	my $ret = E_OK;
+	$ret = shaper_dev_init($i_if, 'dst', 16) if $i_if_enabled;
+	$ret = shaper_dev_init($o_if, 'src', 12) if $o_if_enabled;
+	return $ret;
 }
 
 sub shaper_dev_init
@@ -1166,34 +1109,75 @@ sub shaper_dev_init
 	# bypass specified networks
 	bypass_init($dev, $match);
 
-	# block all other traffic
-	$TC->(
-		"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
-		'u32 match u32 0 0 at 0 police mtu 1 action drop'
-	);
+	if ($default_policy eq 'block') {
+		# block all other traffic
+		$TC->(
+			"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
+			'u32 match u32 0 0 at 0 police mtu 1 action drop'
+		);
+	} elsif ($default_policy eq 'pass') {
+		# add default class
+		$shaper_dev_add_class->($dev, $default_cid, $default_rate, $default_ceil);
+	}
 	return $?;
 }
 
 sub shaper_add
 {
 	my ($ip, $cid, $rate) = @_;
+	my $ret = E_OK;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-	shaper_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key)
+	$ret = shaper_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key)
 		if $i_if_enabled;
-	shaper_dev_add($o_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key)
+	$ret = shaper_dev_add($o_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key)
 		if $o_if_enabled;
-	return $?;
+	return $ret;
 }
 
 sub shaper_dev_add
 {
 	my ($dev, $cid, $rate, $ceil, $match, $ht, $key) = @_;
+	my $ret = E_OK;
 
-	$dev_add_class->($dev, $cid, $rate, $ceil);
+	$ret = $shaper_dev_add_class->($dev, $cid, $rate, $ceil);
+	$ret = shaper_dev_add_filter($dev, $cid, $match, $ht, $key);
+	return $ret;
+}
+
+sub shaper_dev_add_filter
+{
+	my ($dev, $cid, $match, $ht, $key) = @_;
+
 	$TC->(
 		"filter replace dev $dev parent 1: pref $pref_leaf ".
 		"handle $ht:$key:800 u32 ht $ht:$key: match $match flowid 1:$cid"
+	);
+	return $?;
+}
+
+sub htb_dev_add_class
+{
+	my ($dev, $cid, $rate, $ceil) = @_;
+	$TC->(
+		"class replace dev $dev parent 1: classid 1:$cid htb ".
+		"rate $rate ceil $ceil quantum $quantum"
+	);
+	$TC->(
+		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
+	);
+	return $?;
+}
+
+sub hfsc_dev_add_class
+{
+	my ($dev, $cid, $rate, $ceil) = @_;
+	$TC->(
+		"class replace dev $dev parent 1: classid 1:$cid hfsc ".
+		"sc rate $rate ul rate $ceil"
+	);
+	$TC->(
+		"qdisc replace dev $dev parent 1:$cid handle $cid:0 $leaf_qdisc"
 	);
 	return $?;
 }
@@ -1202,31 +1186,65 @@ sub shaper_change
 {
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
+	my $ret = E_OK;
+	$ret = $shaper_dev_change_class->($i_if, $cid, $rate, $ceil) if $i_if_enabled;
+	$ret = $shaper_dev_change_class->($o_if, $cid, $rate, $ceil) if $o_if_enabled;
+	return $ret;
+}
 
-	$dev_change_class->($i_if, $cid, $rate, $ceil) if $i_if_enabled;
-	$dev_change_class->($o_if, $cid, $rate, $ceil) if $o_if_enabled;
+sub htb_dev_change_class
+{
+	my ($dev, $cid, $rate, $ceil) = @_;
+	$TC->(
+		"class change dev $dev parent 1:0 classid 1:$cid htb ".
+		"rate $rate ceil $ceil quantum $quantum"
+	);
+	return $?;
+}
+
+sub hfsc_dev_change_class
+{
+	my ($dev, $cid, $rate, $ceil) = @_;
+	$TC->(
+		"class change dev $dev parent 1: classid 1:$cid hfsc ".
+		"sc rate $rate ul rate $ceil"
+	);
 	return $?;
 }
 
 sub shaper_del
 {
 	my ($ip, $cid) = @_;
+	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-
-	shaper_dev_del($i_if, $cid, $ht, $key) if $i_if_enabled;
-	shaper_dev_del($o_if, $cid, $ht, $key) if $o_if_enabled;
-	return $?
+	$ret = shaper_dev_del($i_if, $cid, $ht, $key) if $i_if_enabled;
+	$ret = shaper_dev_del($o_if, $cid, $ht, $key) if $o_if_enabled;
+	return $ret;
 }
 
 sub shaper_dev_del
 {
 	my ($dev, $cid, $ht, $key) = @_;
+	shaper_dev_del_filter($dev, $ht, $key);
+	shaper_dev_del_class($dev, $cid);
+	return $?;
+}
 
+sub shaper_dev_del_filter
+{
+	my ($dev, $ht, $key) = @_;
 	$TC->(
 		"filter del dev $dev parent 1: pref $pref_hash ".
 		"handle $ht:$key:800 u32"
 	);
-	$dev_del_class->($dev, $cid);
+	return $?;
+}
+
+sub shaper_dev_del_class
+{
+	my ($dev, $cid) = @_;
+	$TC->("qdisc del dev $dev parent 1:$cid handle $cid:0");
+	$TC->("class del dev $dev parent 1: classid 1:$cid");
 	return $?;
 }
 
@@ -1279,7 +1297,8 @@ sub shaper_load
 sub shaper_show
 {
 	my @ips = @_;
-	my $dev;
+	my ($dev, $cid);
+	my $ret = E_OK;
 
 	$dev = $o_if if $o_if_enabled;
 	$dev = $i_if if $i_if_enabled;
@@ -1287,7 +1306,6 @@ sub shaper_show
 	if (nonempty($ips[0])) {
 		foreach my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
-			my $cid;
 
 			open my $TCFH, '-|', "$tc -p -s filter show dev $dev"
 				or log_croak("unable to open pipe for $tc");
@@ -1295,11 +1313,13 @@ sub shaper_show
 			close $TCFH or log_carp("unable to close pipe for $tc");
 			for my $i (0 .. $#tcout) {
 				chomp $tcout[$i];
-				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+				if ($tcout[$i] =~ /match\ IP\ .*\ $ip/xms) {
 					if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 						print BOLD, "TC rules for $ip\n\n", RESET;
-						shaper_dev_ip_show($i_if, 'Input',  $ip, $cid) if $i_if_enabled;
-						shaper_dev_ip_show($o_if, 'Output', $ip, $cid) if $o_if_enabled;
+						$ret = shaper_dev_ip_show($i_if, 'Input',  $ip, $cid)
+							if $i_if_enabled;
+						$ret = shaper_dev_ip_show($o_if, 'Output', $ip, $cid)
+							if $o_if_enabled;
 						print "\n";
 						last;
 					}
@@ -1308,21 +1328,10 @@ sub shaper_show
 		}
 	}
 	else {
-		print BOLD, "\nInput filters [$i_if]:\n", RESET;
-		system "$tc -p -s filter show dev $i_if" if $i_if_enabled;
-		print BOLD, "\nOutput filters [$o_if]:\n", RESET;
-		system "$tc -p -s filter show dev $o_if" if $o_if_enabled;
-		print BOLD, "\nInput classes [$i_if]:\n", RESET;
-		system "$tc -i -s -d class show dev $i_if" if $i_if_enabled;
-		print BOLD, "\nOutput classes [$o_if]:\n", RESET;
-		system "$tc -i -s -d class show dev $o_if" if $o_if_enabled;
-		print BOLD, "\nInput qdiscs [$i_if]:\n", RESET;
-		system "$tc -i -s -d qdisc show dev $i_if" if $i_if_enabled;
-		print BOLD, "\nOutput qdiscs [$o_if]:\n", RESET;
-		system "$tc -i -s -d qdisc show dev $o_if" if $o_if_enabled;
-		return $?;
+		$ret = shaper_dev_show($i_if) if $i_if_enabled;
+		$ret = shaper_dev_show($o_if) if $o_if_enabled;
 	}
-	return $?;
+	return $ret;
 }
 
 sub shaper_dev_ip_show
@@ -1332,18 +1341,30 @@ sub shaper_dev_ip_show
 	print_rules(
 		"\n$type filter [$dev]:",
 		"$tc -p -s filter show dev $dev | ".
-		"grep -G -w -B 1 \"match IP .* $ip/32\""
+		"grep -G -w -B 1 \"match IP .* $ip\""
 	);
 	print_rules(
 		"\n$type class [$dev]:",
 		"$tc -i -s -d class show dev $dev | ".
-		"grep -G -w -A 3 \"leaf $cid\:\""
+		"grep -G -w -A 4 \"leaf $cid\:\""
 	);
 	print_rules(
 		"\n$type qdisc [$dev]:",
 		"$tc -i -s -d qdisc show dev $dev | ".
 		"grep -G -w -A 2 \"$cid\: parent 1:$cid\""
 	);
+	return $?;
+}
+
+sub shaper_dev_show
+{
+	my ($dev) = @_;
+	print BOLD, "\nInput filters [$dev]:\n", RESET;
+	system "$tc -p -s filter show dev $dev";
+	print BOLD, "\nInput classes [$dev]:\n", RESET;
+	system "$tc -i -s -d class show dev $dev";
+	print BOLD, "\nInput qdiscs [$dev]:\n", RESET;
+	system "$tc -i -s -d qdisc show dev $dev";
 	return $?;
 }
 
@@ -1354,13 +1375,14 @@ sub shaper_reset
 	return $?;
 }
 
-# policing
+# policing regime
 
 sub policer_init
 {
-	policer_dev_init($o_if, 'dst', 16) if $o_if_enabled;
-	policer_dev_init($i_if, 'src', 12) if $i_if_enabled;
-	return $?;
+	my $ret = E_OK;
+	$ret = policer_dev_init($o_if, 'dst', 16) if $o_if_enabled;
+	$ret = policer_dev_init($i_if, 'src', 12) if $i_if_enabled;
+	return $ret;
 }
 
 sub policer_dev_init
@@ -1427,11 +1449,13 @@ sub policer_dev_init
 	}
 
 	# block all other traffic
-	$TC->(
-		"filter add dev $dev parent $ingress_cid: protocol ip ".
-		"pref $pref_default u32 match u32 0 0 at 0 ".
-		"police mtu 1 action drop"
-	);
+	if ($default_policy eq 'block') {
+		$TC->(
+			"filter add dev $dev parent $ingress_cid: protocol ip ".
+			"pref $pref_default u32 match u32 0 0 at 0 ".
+			"police mtu 1 action drop"
+		);
+	}
 	return $?;
 }
 
@@ -1439,13 +1463,14 @@ sub policer_add
 {
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
+	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key)
-		if $i_if_enabled;
-	policer_dev_add($o_if, $rate, $ceil, "ip dst $ip", $ht, $key)
+	$ret = policer_dev_add($o_if, $rate, $ceil, "ip dst $ip", $ht, $key)
 		if $o_if_enabled;
-	return $?;
+	$ret = policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key)
+		if $i_if_enabled;
+	return $ret;
 }
 
 sub policer_dev_add
@@ -1466,10 +1491,11 @@ sub policer_dev_add
 sub policer_del
 {
 	my ($ip, $cid) = @_;
+	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-	policer_dev_del($i_if, $ht, $key) if $i_if_enabled;
-	policer_dev_del($o_if, $ht, $key) if $o_if_enabled;
-	return $?
+	$ret = policer_dev_del($i_if, $ht, $key) if $i_if_enabled;
+	$ret = policer_dev_del($o_if, $ht, $key) if $o_if_enabled;
+	return $ret;
 }
 
 sub policer_dev_del
@@ -1513,6 +1539,7 @@ sub policer_load
 sub policer_show
 {
 	my @ips = @_;
+	my $ret = E_OK;
 
 	if (nonempty($ips[0])) {
 		foreach my $ip (@ips) {
@@ -1522,17 +1549,10 @@ sub policer_show
 		}
 	}
 	else {
-		if ($i_if_enabled) {
-			print BOLD, "\nPOLICING FILTERS [$i_if]:\n", RESET;
-			system "$tc -p -s filter show dev $i_if parent $ingress_cid:";
-		}
-		if ($o_if_enabled) {
-			print BOLD, "\nPOLICING FILTERS [$o_if]:\n", RESET;
-			system "$tc -p -s filter show dev $o_if parent $ingress_cid:";
-		}
-		return $?;
+		$ret = policer_dev_show($i_if) if $i_if_enabled;
+		$ret = policer_dev_show($o_if) if $o_if_enabled;
 	}
-	return $?;
+	return $ret;
 }
 
 sub policer_dev_ip_show
@@ -1547,14 +1567,22 @@ sub policer_dev_ip_show
 	close $TCFH or log_carp("unable to close pipe for $tc");
 	for my $i (0 .. $#tcout) {
 		chomp $tcout[$i];
-		if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
-			print BOLD, "$type filter [$dev]:\n", RESET;
+		if ($tcout[$i] =~ /match\ IP\ .*\ $ip/xms) {
+			print BOLD, "\n$type filter [$dev]:\n", RESET;
 			for my $j ($i-1 .. $i+4) {
 				print "$tcout[$j]";
 			}
 			last;
 		}
 	}
+	return $?;
+}
+
+sub policer_dev_show
+{
+	my ($dev) = @_;
+	print BOLD, "\nPOLICING FILTERS [$dev]:\n", RESET;
+	system "$tc -p -s filter show dev $dev parent $ingress_cid:";
 	return $?;
 }
 
@@ -1567,44 +1595,46 @@ sub policer_reset
 	return $?;
 }
 
-# policing and shaping on ingress interface
+# hybrid regime: policing and shaping on ingress interface
 
 sub hybrid_init
 {
-	policer_dev_init($i_if, 'src', 12);
-	shaper_dev_init($i_if, 'dst', 16);
-	return $?;
+	my $ret = E_OK;
+	$ret = policer_dev_init($i_if, 'src', 12);
+	$ret = shaper_dev_init($i_if, 'dst', 16);
+	return $ret;
 }
 
 sub hybrid_add
 {
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
+	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-
-	policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
-	shaper_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
-	return $?;
+	$ret = policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
+	$ret = shaper_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+	return $ret;
 }
 
 sub hybrid_del
 {
 	my ($ip, $cid) = @_;
+	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-	policer_dev_del($i_if, $ht, $key);
-	shaper_dev_del($i_if, $cid, $ht, $key);
-	return $?
+	$ret = policer_dev_del($i_if, $ht, $key);
+	$ret = shaper_dev_del($i_if, $cid, $ht, $key);
+	return $ret;
 }
 
 sub hybrid_change
 {
 	my ($ip, $cid, $rate) = @_;
+	my $ret = E_OK;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-
-	policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
-	$dev_change_class->($i_if, $cid, $rate, $ceil);
-	return $?;
+	$ret = policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
+	$ret = $shaper_dev_change_class->($i_if, $cid, $rate, $ceil);
+	return $ret;
 }
 
 sub hybrid_show
@@ -2330,7 +2360,7 @@ Database username.
 
 Database password. Remember that it is insecure to specify password here.
 
-=item B<-S>, B<--syslog>
+=item B<-S>, B<--syslog_enable>
 
 Send errors and warnings to syslog.
 

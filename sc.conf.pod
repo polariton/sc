@@ -36,21 +36,17 @@ generation.
 
 =item B<limit_method>
 
-Rate limiting method.
-
-Default value: B<shaping>.
+Rate limiting method. The B<hybrid> method uses shaping for download and
+policing for upload, and all the rules are created on the B<in_if> interface.
+This is suitable, when NAT is performed on the outbound interface.
 
 Possible values: B<shaping>, B<policing>, B<hybrid>.
 
-The B<hybrid> method uses shaping for download and policing for upload, and
-all the rules are created on the B<in_if> interface.
-This is suitable, when NAT is performed on the outbound interface.
+Default value: B<shaping>.
 
 =item B<debug>
 
 Debug modes.
-
-Default value: B<0>.
 
 Possible values:
 
@@ -70,11 +66,11 @@ print all command lines without execution.
 
 =back
 
+Default value: B<0>.
+
 =item B<verbose>
 
 When enabled, turns on verbose messages and disables piping of tc(8) rules.
-
-Default value: B<0>.
 
 Possible values:
 
@@ -98,22 +94,24 @@ do B<1> + B<2>
 
 =back
 
+Default value: B<0>.
+
 =item B<quiet>
 
 Suppress output. Does not affect messages caused by C<verbose> flag.
 
-Default value: B<0>.
-
 Possible values: boolean.
+
+Default value: B<0>.
 
 =item B<colored>
 
 Colorize output using ANSI escape sequences.
 Autodetection of non-tty handles is supported.
 
-Default value: B<1>.
-
 Possible values: boolean.
+
+Default value: B<1>.
 
 =item B<joint>
 
@@ -125,13 +123,13 @@ a single command.
 This variable contains the list of networks for classid calculation.
 These networks must cover all IPs which you are going to use in shaping rules.
 
-Default value: B<10.0.0.0/16>.
-
-Possible values: a list of networks with mask from 16 to 31 method.
+Possible values: a list of networks with masks from 16 to 31.
 
 Total number of hosts in the specified networks should not exceed the maximum
 number of child classes: 65533 (from 2 to fffd, because fffe is reserved for
 default class, and ffff is for ingress policer).
+
+Default value: B<10.0.0.0/16>.
 
 =item B<filter_network>
 
@@ -147,32 +145,42 @@ by a single hashing filter
 
 	filter_network = 10.0.0.0/16
 
-Default value: same as B<network> parameter.
-
 Possible values: a list of networks with mask from 16 to 31, that includes the
 networks specified in B<network> parameter.
+
+Default value: same as B<network> parameter.
+
+=item B<default_policy>
+
+Default traffic policy for shaper.
+
+Possible values: B<block> or B<pass>.
+
+Default value: B<block>.
 
 =item B<bypass_int>
 
 List of internal networks and IPs, whose traffic is transmitted without
 shaping.
 
-Default value: B<empty>.
-
 Possible values: space-separated list of networks with masks from 16 to 32.
+
+Default value: B<empty>.
 
 =item B<bypass_ext>
 
 List of external networks and IPs, whose traffic is transmitted without
 shaping.
 
-Default value: B<empty>.
-
 Possible values: space-separated list of networks with masks from 16 to 32.
+
+Default value: B<empty>.
 
 =item B<policer_burst_ratio>
 
 Ratio between the size of policer buffer size and bandwidth rate.
+
+Possible values: floating-point number.
 
 Default value: B<0.1>.
 
@@ -181,17 +189,17 @@ Default value: B<0.1>.
 Amount of bytes a stream is allowed to dequeue before the next queue gets a
 turn.
 
-Default value: B<1500>.
-
 Possible values: integer numbers >= MTU of the interface.
+
+Default value: B<1500>.
 
 =item B<rate_unit>
 
 Default rate unit.
 
-Default value: B<kibit>.
+Possible values: see sc(8) or tc(8) manpage for list of units.
 
-Possible values: see sc(8) or tc(8) manpage.
+Default value: B<kibit>.
 
 =item B<rate_ratio>
 
@@ -200,17 +208,17 @@ Ratio between bandwidth rates in rules and in the database.
 
 This coefficient is used only for B<load> and B<sync> commands.
 
-Default value: B<1.0>.
+Possible values: floating-point number.
 
-Possible values: any rational number.
+Default value: B<1.0>.
 
 =item B<root_qdisc>
 
 Root queueing discipline.
 
-Default value: B<htb>.
-
 Possible values: B<htb> or B<hfsc>.
+
+Default value: B<htb>.
 
 =item B<leaf_qdisc>
 
@@ -218,94 +226,96 @@ Leaf queueing discipline with parameters.
 This string will be used as a tail of corresponding C<tc qdisc ...> command
 line.
 
-Default value: B<pfifo limit 100>.
-
 Possible values: all classless qdiscs supported by tc(8).
+
+Default value: B<pfifo limit 100>.
 
 =item B<db_host>
 
 Database host.
 
-Default value: B<127.0.0.1>.
-
 Possible values: IP-address or domain name.
+
+Default value: B<127.0.0.1>.
 
 =item B<db_driver>
 
 Database driver.
 
-Default value: B<SQLite>.
-
 Possible values: all database drivers supported by Perl DBI module.
 See output of C<sc help> command for the list of available drivers.
+
+Default value: B<SQLite>.
 
 =item B<db_user>
 
 Username to use when connecting to database.
 
-Default value: B<user>.
-
 Possible values: depends on database server.
+
+Default value: B<user>.
 
 =item B<db_pass>
 
 The password to use when connecting to database. Remember that specifying a
 password on the command line is insecure.
 
-Default value: B<password>.
-
 Possible values: arbitrary string.
+
+Default value: B<password>.
 
 =item B<db_name>
 
 Database name to use.
 
-Default value: B<sc.db>.
-
 Possible values: arbibrary string (should be a valid filename in case of
 SQLite driver).
+
+Default value: B<sc.db>.
 
 =item B<Database queries>
 
 =over 16
 
-=item B<query_create>
+=item B<create>
 
 Create table with C<ip> and C<rate> columns.
 
-=item B<query_load>
+=item B<load>
 
 Select all data from table.
 
-=item B<query_list>
+=item B<list>
 
 Select data for one IP.
 
-=item B<query_add>
+=item B<add>
 
 add a new entry.
 
-=item B<query_del>
+=item B<del>
 
 delete an existing entry.
 
-=item B<query_change>
+=item B<change>
 
 modify an existing entry.
 
 =back
 
-=item B<syslog>
+=item B<Syslog options>
+
+=over 16
+
+=item B<enable>
 
 Output errors and warnings to syslog.
 
-Default value: B<1>.
-
 Possible values: boolean.
 
-=item B<syslog_options>
+Default value: B<1>.
 
-Default value: B<<empty string>>.
+=item B<options>
 
 Possible values (comma-separated):
 
@@ -330,11 +340,15 @@ include PID with each message
 
 =back
 
-=item B<syslog_facility>
+Default value: B<<empty string>>.
+
+=item B<facility>
+
+Possible values: see Sys::Syslog(3), section C<Facilities>.
 
 Default value: B<user>.
 
-Possible values: see Sys::Syslog(3), section C<Facilities>.
+=back
 
 =back
 

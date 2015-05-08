@@ -1791,13 +1791,17 @@ sub cmd_list
 sub cmd_load
 {
 	my $ret = E_OK;
+	my ($cid, $rate);
 
 	$rul_batch_start->();
 	$ret = $rul_init->();
 	$ret = db_load();
-	foreach my $cid (keys %db_data) {
-		my $r = round($rate_ratio*$db_data{$cid}{'rate'});
-		$rul_add->($db_data{$cid}{'ip'}, $cid, "$r$rate_unit");
+	foreach $cid (keys %db_data) {
+		$rate = $db_data{$cid}{'rate'};
+		if ($rate != 0) {
+			$rate = round($rate_ratio * $rate);
+			$rul_add->($db_data{$cid}{'ip'}, $cid, $rate.$rate_unit);
+		}
 	}
 	$rul_batch_stop->();
 	return $ret;
@@ -1806,6 +1810,7 @@ sub cmd_load
 sub cmd_sync
 {
 	my ($add, $del, $chg) = (0, 0, 0);
+	my ($db_rate, $rul_rate);
 
 	$rul_load->();
 	db_load();
@@ -1822,17 +1827,20 @@ sub cmd_sync
 	}
 	foreach my $dcid (keys %db_data) {
 		# delete entries with zero rates
-		if ($db_data{$dcid}{'rate'} == 0) {
+		$db_rate = $db_data{$dcid}{'rate'};
+		my $db_rate_zero = ($db_rate == 0);
+		my $rul_rate_defined = nonempty($rul_data{$dcid}{'rate'});
+		if ($db_rate_zero && $rul_rate_defined ) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "- $ip\n" if $verbose & VERB_ON;
 			$rul_del->($ip, $dcid);
 			$del++;
 			next;
 		}
-		my $db_rate = round($rate_ratio*$db_data{$dcid}{'rate'});
-		$db_rate .= "$rate_unit";
+		$db_rate = round($rate_ratio * $db_rate);
+		$db_rate .= $rate_unit;
 		# add new entries
-		if (!defined $rul_data{$dcid}) {
+		if (!$db_rate_zero && !$rul_rate_defined) {
 			my $ip = $db_data{$dcid}{'ip'};
 			print "+ $ip\n" if $verbose & VERB_ON;
 			$rul_add->($ip, $dcid, $db_rate);
@@ -1840,19 +1848,14 @@ sub cmd_sync
 			next;
 		}
 		# change if rate in database is different
-		my $rul_rate = $rul_data{$dcid}{'rate'};
-		if (!nonempty($rul_rate)) {
-			log_carp("Classid $dcid has undefined rate in shaping rules\n");
-			$rul_rate = 0;
-		}
-		if ($rul_rate ne $db_rate) {
-			my $ip = $db_data{$dcid}{'ip'};
-			print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;
-			$rul_change->($ip, $dcid, $db_rate);
-			$chg++;
-		}
-		else {
-			next;
+		if ($rul_rate_defined) {
+			my $rul_rate = $rul_data{$dcid}{'rate'};
+			if ($rul_rate ne $db_rate) {
+				my $ip = $db_data{$dcid}{'ip'};
+				print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;
+				$rul_change->($ip, $dcid, $db_rate);
+				$chg++;
+			}
 		}
 	}
 

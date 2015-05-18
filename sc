@@ -1448,6 +1448,9 @@ sub policer_dev_init
 		}
 	}
 
+	# bypass specified networks
+	bypass_init($dev, $match);
+
 	# block all other traffic
 	if ($default_policy eq 'block') {
 		$TC->(

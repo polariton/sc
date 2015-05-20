@@ -918,12 +918,12 @@ sub tc_batch_stop
 
 sub bypass_init
 {
-	my ($dev, $match) = @_;
+	my ($dev, $match, $parent) = @_;
 
 	if (nonempty($bypass_int)) {
 		foreach my $n (split /\ /ixms, $bypass_int) {
 			$TC->(
-				"filter add dev $dev parent 1:0 protocol ip ".
+				"filter add dev $dev parent $parent: protocol ip ".
 				"pref $pref_bypass u32 match ip $match $n action pass"
 			);
 		}
@@ -933,7 +933,7 @@ sub bypass_init
 		my $rev_match = ($match eq 'src') ? 'dst' : 'src';
 		foreach my $n (split /\ /ixms, $bypass_ext) {
 			$TC->(
-				"filter add dev $dev parent 1:0 protocol ip ".
+				"filter add dev $dev parent $parent: protocol ip ".
 				"pref $pref_bypass u32 match ip $rev_match $n action pass"
 			);
 		}
@@ -1107,7 +1107,7 @@ sub shaper_dev_init
 	}
 
 	# bypass specified networks
-	bypass_init($dev, $match);
+	bypass_init($dev, $match, 1);
 
 	if ($default_policy eq 'block') {
 		# block all other traffic
@@ -1449,7 +1449,7 @@ sub policer_dev_init
 	}
 
 	# bypass specified networks
-	bypass_init($dev, $match);
+	bypass_init($dev, $match, $ingress_cid);
 
 	# block all other traffic
 	if ($default_policy eq 'block') {

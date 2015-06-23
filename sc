@@ -1113,7 +1113,7 @@ sub shaper_dev_init
 		# block all other traffic
 		$TC->(
 			"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
-			'u32 match u32 0 0 at 0 police mtu 1 action drop'
+			'u32 match u32 0 0 at 0 police mtu 1 drop'
 		);
 	} elsif ($default_policy eq 'pass') {
 		# add default class
@@ -1456,7 +1456,7 @@ sub policer_dev_init
 		$TC->(
 			"filter add dev $dev parent $ingress_cid: protocol ip ".
 			"pref $pref_default u32 match u32 0 0 at 0 ".
-			"police mtu 1 action drop"
+			"police mtu 1 drop"
 		);
 	}
 	return $?;

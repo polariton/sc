@@ -73,6 +73,7 @@ my $default_ceil = '1gibit';
 my $bypass_int = q{};
 my $bypass_ext = q{};
 my $limit_method = 'shaping';
+my $classid = q{};
 
 my (%filter_nets, %class_nets);
 
@@ -274,6 +275,7 @@ my %optd = (
 	'j|joint!'              => \$joint,
 	'b|batch!'              => \$batch,
 	'N|network=s'           => \$network,
+	'C|cid=s'				=> \$classid,
 	'filter_network=s'      => \$filter_network,
 	'limit_method=s'        => \$limit_method,
 	'default_policy=s'      => \$default_policy,
@@ -1744,7 +1746,7 @@ sub cmd_add
 
 	arg_check(\&is_ip, $ip, 'IP');
 	$rate = arg_check(\&is_rate, $rate, 'rate');
-	my $cid = ip_classid($ip);
+	my $cid = (nonempty($classid)) ? $classid : ip_classid($ip);
 	return $rul_add->($ip, $cid, $rate);
 }
 
@@ -1753,7 +1755,7 @@ sub cmd_del
 	my ($ip) = @_;
 
 	arg_check(\&is_ip, $ip, 'IP');
-	my $cid = ip_classid($ip);
+	my $cid = (nonempty($classid)) ? $classid : ip_classid($ip);
 	return $rul_del->($ip, $cid);
 }
 
@@ -1763,7 +1765,7 @@ sub cmd_change
 
 	arg_check(\&is_ip, $ip, 'IP');
 	$rate = arg_check(\&is_rate, $rate, 'rate');
-	my $cid = ip_classid($ip);
+	my $cid = (nonempty($classid)) ? $classid : ip_classid($ip);
 	return $rul_change->($ip, $cid, $rate);
 }
 
@@ -2293,12 +2295,17 @@ Suppress output of error messages from tc(8).
 
 =item B<-c>, B<--colored>
 
-Colorize output of some commands
+Colorize the output.
+
+=item B<-C>, B<--cid> classid
+
+Use the specified classid value in B<add>, B<change> and B<del> commands
+instead of automatically calculated.
 
 =item B<-j>, B<--joint>
 
-Joint mode. Add, change and del commands will be applied to rules and database
-entries simultaneously.
+Joint mode. B<Add>, B<change> and B<del> commands will be applied to rules and
+database entries simultaneously.
 
 =item B<-b>, B<--batch>
 
@@ -2364,7 +2371,7 @@ Database username.
 
 =item B<--db_pass> password
 
-Database password. Remember that it is insecure to specify password here.
+Database password. Remember that it is insecure to specify a password here.
 
 =item B<-S>, B<--syslog_enable>
 
@@ -2376,9 +2383,9 @@ Send errors and warnings to syslog.
 =head1 RATE UNITS
 
 All rates should be specified as integer numbers, possibly followed by a unit.
-Bare number implies default unit (kibit).
-You may use another unit by changing C<rate_unit> parameter in configuration
-file or by setting the similar command line option.
+Bare number implies the default unit (kibit).
+You may use another unit by changing C<rate_unit> parameter in the
+configuration file or by setting the similar command line option.
 
 =over 18
 

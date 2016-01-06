@@ -182,7 +182,7 @@ Ratio between the size of policer buffer size and bandwidth rate.
 
 Possible values: floating-point number.
 
-Default value: B<0.1>.
+Default value: B<0.2>.
 
 =item B<quantum>
 

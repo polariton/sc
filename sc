@@ -57,7 +57,7 @@ my $query_add = 'INSERT INTO rates VALUES (?, ?)';
 my $query_del = 'DELETE FROM rates WHERE ip=?';
 my $query_change = 'REPLACE INTO rates VALUES (?, ?)';
 
-my $policer_burst_ratio = 0.1;
+my $policer_burst_ratio = 0.2;
 my $quantum = '1500';
 my $rate_unit = 'kibit';
 my $rate_ratio = 1.0;
@@ -949,9 +949,9 @@ sub bypass_init
 
 sub set_filter_nets
 {
-	# I restrict this value to a 0x799 to avoid discontinuity of filter space.
-	# Real maximum number of u32 hash tables is 0xfff.
-	my $ht_max = 0x799;
+	# I restrict this value to a 0x7ff to avoid discontinuity of the filter
+	# space. Real maximum number of u32 hash tables is 0xfff.
+	my $ht_max = 0x7ff;
 
 	# Initial numbers for hash tables of 1st and 2nd nesting levels
 	#
@@ -1392,7 +1392,10 @@ sub policer_dev_init
 	my ($dev, $match, $offset) = @_;
 
 	$TC->("qdisc add dev $dev handle $ingress_cid: ingress");
-	$TC->("filter add dev $dev parent $ingress_cid: protocol ip pref $pref_hash u32");
+	$TC->(
+		"filter add dev $dev parent $ingress_cid: protocol ip ".
+		"pref $pref_hash u32"
+	);
 	foreach my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
 	  keys %filter_nets) {
 		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
@@ -2544,7 +2547,7 @@ For similar reasons sc(8) only supports networks with masks from /16 to /31.
 
 For simplicity of u32 hash table numbers calculation, the maximum number of
 entries in C<filter_network> parameter is 255, and the number of hashing
-filters is limited by 0x799.
+filters is limited by 0x7ff.
 
 
 =head1 SEE ALSO

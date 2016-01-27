@@ -154,7 +154,10 @@ Default value: same as B<network> parameter.
 
 Default traffic policy for shaper.
 
-Possible values: B<block> or B<pass>.
+Possible values: B<block-all>, B<block> or B<pass>.
+   block-all = block all traffic including shaper itself
+   block = block all IP's, except for shaper's interfaces (default)
+   pass = allow all traffic
 
 Default value: B<block>.
 

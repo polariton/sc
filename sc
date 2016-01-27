@@ -10,6 +10,8 @@ use Sys::Syslog;
 use AppConfig qw( :expand );
 use Term::ANSIColor qw( :constants );
 use POSIX qw( isatty );
+use Socket;
+require 'sys/ioctl.ph';
 
 #
 # Configurable parameters
@@ -86,7 +88,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-my $VERSION = '1.5.6';
+our $VERSION = '1.5.7';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table
@@ -275,7 +277,7 @@ my %optd = (
 	'j|joint!'              => \$joint,
 	'b|batch!'              => \$batch,
 	'N|network=s'           => \$network,
-	'C|cid=s'				=> \$classid,
+	'C|cid=s'               => \$classid,
 	'filter_network=s'      => \$filter_network,
 	'limit_method=s'        => \$limit_method,
 	'default_policy=s'      => \$default_policy,
@@ -373,7 +375,7 @@ if ($batch) {
 		$c =~ s/\s+\#.*$//ixms;
 		push @queue, $c;
 	}
-	foreach (@queue) {
+	for (@queue) {
 		my @a = split /\ /ixms;
 		$RET = main(@a);
 	}
@@ -474,7 +476,7 @@ sub print_cmds
 	my %lengths;
 
 	# find maximum length of command and arguments
-	foreach my $key (@cmds) {
+	for my $key (@cmds) {
 		my @aliases = split /\|/ixms, $key;
 		$lengths{$key}{'cmd'} = $aliases[0];
 
@@ -488,7 +490,7 @@ sub print_cmds
 		$maxarglen = $al if $maxarglen < $al;
 	}
 
-	foreach my $key (@cmds) {
+	for my $key (@cmds) {
 		next unless nonempty($cmdd{$key}{'desc'});
 		print q{ } x $colspace[0], $lengths{$key}{'cmd'},
 		      q{ } x ($maxcmdlen - $lengths{$key}{'cmdl'} + $colspace[1]);
@@ -590,9 +592,9 @@ sub acomp_cmd
 	my @match;
 	my @ambig;
 
-	foreach my $key (keys %cmdd) {
+	for my $key (keys %cmdd) {
 		my @cmds = split /\|/ixms, $key;
-		foreach my $a (@cmds) {
+		for my $a (@cmds) {
 			if ($a =~ /^$input/xms) {
 				push @match, $key;
 				push @ambig, $a;
@@ -691,7 +693,7 @@ sub is_rate
 	if (($num, $unit) = $rate =~ /^([0-9]+)([A-z]*)$/xms) {
 		return 0 if $num == 0;
 		if (nonempty($unit)) {
-			foreach my $u (keys %units) {
+			for my $u (keys %units) {
 				if ($unit =~ /^(?:$u)$/xms) {
 					$result = $rate;
 					last;
@@ -741,7 +743,7 @@ sub rate_cvt
 	if (($num) = $rate =~ /^([0-9]+)([A-z]*)$/xms) {
 		$unit = nonempty($2) ? $2 : $rate_unit;
 		return $rate if $unit eq $dst_unit;
-		foreach my $u (keys %units) {
+		for my $u (keys %units) {
 			if ($unit =~ /^($u)$/xms) {
 				$s_key = $u;
 				last;
@@ -753,7 +755,7 @@ sub rate_cvt
 	}
 	log_croak('invalid source unit specified') if !defined $s_key;
 
-	foreach my $u (keys %units) {
+	for my $u (keys %units) {
 		if ($dst_unit =~ /^($u)$/xms) {
 			$d_key = $u;
 			last;
@@ -816,6 +818,19 @@ sub db_load
 	return $ret;
 }
 
+sub get_iface_ip
+{
+	my ($iface) = @_;
+	my $socket;
+	socket($socket, PF_INET, SOCK_STREAM, (getprotobyname('tcp'))[2])
+		or log_carp("unable to create a socket: $!\n");
+	my $buf = pack('a256', $iface);
+	if (ioctl($socket, SIOCGIFADDR(), $buf) && (my @ip = unpack('x20 C4', $buf))) {
+		return join('.', @ip);
+	}
+	return undef;
+}
+
 #
 # Common rule processing functions
 #
@@ -826,7 +841,7 @@ sub set_class_nets
 	my $cid_max = 0xFFFF;
 	my $cid_i = $cid_min;
 
-	foreach my $n (split /\ /ixms, $network) {
+	for my $n (split /\ /ixms, $network) {
 		my ($netip, $netmask) = split /\//ixms, $n;
 
 		log_croak("network mask $netmask is not supported. Network: $n")
@@ -854,7 +869,7 @@ sub ip_classid
 	my $intip = ip_texttoint($ip);
 	my $cid;
 
-	foreach my $n (keys %class_nets) {
+	for my $n (keys %class_nets) {
 		if ($intip >= $class_nets{$n}{'intip_i'} &&
 			$intip <= $class_nets{$n}{'intip_f'}) {
 			my $offset = $intip & $class_nets{$n}{'invmask'};
@@ -874,7 +889,7 @@ sub print_rules
 	my @out;
 	my $PIPE;
 
-	foreach my $c (@cmds) {
+	for my $c (@cmds) {
 		open $PIPE, '-|', $c or log_croak("unable to open pipe for $c");
 		push @out, <$PIPE>;
 		close $PIPE or log_croak("unable to close pipe for $c");
@@ -923,7 +938,7 @@ sub bypass_init
 	my ($dev, $match, $parent) = @_;
 
 	if (nonempty($bypass_int)) {
-		foreach my $n (split /\ /ixms, $bypass_int) {
+		for my $n (split /\ /ixms, $bypass_int) {
 			$TC->(
 				"filter add dev $dev parent $parent: protocol ip ".
 				"pref $pref_bypass u32 match ip $match $n action pass"
@@ -933,7 +948,7 @@ sub bypass_init
 
 	if (nonempty($bypass_ext)) {
 		my $rev_match = ($match eq 'src') ? 'dst' : 'src';
-		foreach my $n (split /\ /ixms, $bypass_ext) {
+		for my $n (split /\ /ixms, $bypass_ext) {
 			$TC->(
 				"filter add dev $dev parent $parent: protocol ip ".
 				"pref $pref_bypass u32 match ip $rev_match $n action pass"
@@ -964,7 +979,7 @@ sub set_filter_nets
 	my $ht_21 = 256;
 	my $ht2 = $ht1 + $ht_21;
 
-	foreach my $n (split /\ /ixms, $filter_network) {
+	for my $n (split /\ /ixms, $filter_network) {
 		my ($netip, $netmask) = split /\//ixms, $n;
 		if ($netmask >= 24 && $netmask < 32) {
 			$filter_nets{$n}{'leafht_i'} = $ht1;
@@ -1003,7 +1018,7 @@ sub ip_leafht_key
 	my $intip = ip_texttoint($ip);
 	my ($leafht, $key);
 
-	foreach my $n (keys %filter_nets) {
+	for my $n (keys %filter_nets) {
 		if ($intip >= $filter_nets{$n}{'intip_i'} &&
 			$intip <= $filter_nets{$n}{'intip_f'}) {
 			# 3rd octet
@@ -1051,7 +1066,7 @@ sub shaper_dev_init
 
 	$TC->("qdisc add dev $dev root handle 1: $root_qdisc default $default_cid");
 	$TC->("filter add dev $dev parent 1:0 protocol ip pref $pref_hash u32");
-	foreach my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
+	for my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
 	  keys %filter_nets) {
 		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
 		my $netmask = $filter_nets{$net}{'mask'};
@@ -1111,16 +1126,32 @@ sub shaper_dev_init
 	# bypass specified networks
 	bypass_init($dev, $match, 1);
 
+	# pass shaper's own traffic
 	if ($default_policy eq 'block') {
-		# block all other traffic
+		my $self_ip = get_iface_ip($dev);
+		if (nonempty($self_ip)) {
+			$TC->(
+				"filter add dev $dev parent 1: protocol ip ".
+				"pref $pref_bypass u32 match ip src $self_ip action pass"
+			);
+			$TC->(
+				"filter add dev $dev parent 1: protocol ip ".
+				"pref $pref_bypass u32 match ip dst $self_ip action pass"
+			);
+		}
+	}
+	# block all other traffic
+	if ($default_policy eq 'block' || $default_policy eq 'block-all') {
 		$TC->(
 			"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
 			'u32 match u32 0 0 at 0 police mtu 1 drop'
 		);
-	} elsif ($default_policy eq 'pass') {
+	}
+	if ($default_policy eq 'pass') {
 		# add default class
 		$shaper_dev_add_class->($dev, $default_cid, $default_rate, $default_ceil);
 	}
+
 	return $?;
 }
 
@@ -1286,7 +1317,7 @@ sub shaper_load
 	else {
 		log_croak("\'$root_qdisc\' is unsupported root qdisc");
 	}
-	foreach (@tcout) {
+	for (@tcout) {
 		if (($cid, $rate) = /$leaf_regexp/xms) {
 			next if !defined $rul_data{$cid};
 			$rate = rate_cvt($rate, $rate_unit);
@@ -1306,7 +1337,7 @@ sub shaper_show
 	$dev = $i_if if $i_if_enabled;
 
 	if (nonempty($ips[0])) {
-		foreach my $ip (@ips) {
+		for my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
 
 			open my $TCFH, '-|', "$tc -p -s filter show dev $dev"
@@ -1396,7 +1427,7 @@ sub policer_dev_init
 		"filter add dev $dev parent $ingress_cid: protocol ip ".
 		"pref $pref_hash u32"
 	);
-	foreach my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
+	for my $net (sort {$filter_nets{$a}{'ht'} <=> $filter_nets{$b}{'ht'}}
 	  keys %filter_nets) {
 		my $ht1 = sprintf '%x', $filter_nets{$net}{'ht'};
 		my $netmask = $filter_nets{$net}{'mask'};
@@ -1550,7 +1581,7 @@ sub policer_show
 	my $ret = E_OK;
 
 	if (nonempty($ips[0])) {
-		foreach my $ip (@ips) {
+		for my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
 			policer_dev_ip_show($i_if, 'Input',  $ip) if $i_if_enabled;
 			policer_dev_ip_show($o_if, 'Output', $ip) if $o_if_enabled;
@@ -1650,7 +1681,7 @@ sub hybrid_show
 	my @ips = @_;
 
 	if (nonempty($ips[0])) {
-		foreach my $ip (@ips) {
+		for my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
 			my $cid;
 			my @tcout;
@@ -1779,7 +1810,7 @@ sub cmd_list
 	my $fmt = "%4s  %-15s %11s\n";
 
 	if (nonempty($ips[0])) {
-		foreach my $ip (@ips) {
+		for my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
 			my $cid = ip_classid($ip);
 			if (defined $rul_data{$cid}) {
@@ -1789,7 +1820,7 @@ sub cmd_list
 		}
 	}
 	else {
-		foreach my $cid (sort { hex $a <=> hex $b } keys %rul_data) {
+		for my $cid (sort { hex $a <=> hex $b } keys %rul_data) {
 			printf $fmt, $cid, $rul_data{$cid}{'ip'}, $rul_data{$cid}{'rate'};
 		}
 	}
@@ -1799,12 +1830,12 @@ sub cmd_list
 sub cmd_load
 {
 	my $ret = E_OK;
-	my ($cid, $rate);
+	my $rate;
 
 	$rul_batch_start->();
 	$ret = $rul_init->();
 	$ret = db_load();
-	foreach $cid (keys %db_data) {
+	for my $cid (keys %db_data) {
 		$rate = $db_data{$cid}{'rate'};
 		if ($rate != 0) {
 			$rate = round($rate_ratio * $rate);
@@ -1825,7 +1856,7 @@ sub cmd_sync
 	$rul_batch_start->();
 
 	# delete rules for IPs that is not in database
-	foreach my $rcid (keys %rul_data) {
+	for my $rcid (keys %rul_data) {
 		if (!defined $db_data{$rcid} && defined $rul_data{$rcid}) {
 			my $ip = $rul_data{$rcid}{'ip'};
 			print "- $ip\n" if $verbose & VERB_ON;
@@ -1833,7 +1864,7 @@ sub cmd_sync
 			$del++;
 		}
 	}
-	foreach my $dcid (keys %db_data) {
+	for my $dcid (keys %db_data) {
 		# delete entries with zero rates
 		$db_rate = $db_data{$dcid}{'rate'};
 		my $db_rate_zero = ($db_rate == 0);
@@ -1857,7 +1888,7 @@ sub cmd_sync
 		}
 		# change if rate in database is different
 		if ($rul_rate_defined) {
-			my $rul_rate = $rul_data{$dcid}{'rate'};
+			$rul_rate = $rul_data{$dcid}{'rate'};
 			if ($rul_rate ne $db_rate) {
 				my $ip = $db_data{$dcid}{'ip'};
 				print "* $ip $rul_rate -> $db_rate\n" if $verbose & VERB_ON;
@@ -1910,7 +1941,7 @@ sub cmd_status
 		my @lqd = split /\ /xms, $leaf_qdisc;
 		my $lqdisc = $lqd[0];
 		shift @out;
-		foreach my $s (@out) {
+		for my $s (@out) {
 			chomp $s;
 			if ($s =~ /qdisc\ $lqdisc\ ([0-9a-f]+):/xms) {
 				log_warn('shaping rules were successfully created');
@@ -1987,7 +2018,7 @@ sub cmd_dbdel
 	my $dbh = db_connect();
 	my $sth;
 
-	foreach my $ip (@ips) {
+	for my $ip (@ips) {
 		arg_check(\&is_ip, $ip, 'IP');
 		my $intip = ip_texttoint($ip);
 		$sth = $dbh->prepare($query_del);
@@ -2022,7 +2053,7 @@ sub cmd_dblist
 
 	if (!defined $ip) {
 		$ret = db_load();
-		foreach my $cid (sort { hex $a <=> hex $b } keys %db_data) {
+		for my $cid (sort { hex $a <=> hex $b } keys %db_data) {
 			printf "%-15s  %10s\n", $db_data{$cid}{'ip'},
 				"$db_data{$cid}{'rate'}$rate_unit";
 		}
@@ -2111,13 +2142,14 @@ hybrid.
 =back
 
 
-=head1 PREREQUISITES
-
-=head2 Perl modules
+=head1 DEPENDENCIES
 
 DBI and corresponding database-dependent module (e.g. DBD::Pg for PostgreSQL,
 DBD::SQLite for SQLite, etc), AppConfig, Carp, Getopt::Long, Pod::Usage,
 Sys::Syslog, Term::ANSIColor.
+
+
+=head1 PREREQUISITES
 
 =head2 Command-line tools
 

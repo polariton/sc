@@ -2585,8 +2585,7 @@ filters is limited by 0x7ff.
 =head1 SEE ALSO
 
 sc.conf(5), tc(8), tc-htb(8), tc-hfsc(8), Getopt::Long(3), AppConfig(3),
-http://lartc.org/howto/lartc.adv-filter.hashing.html,
-http://ace-host.stuart.id.au/russell/files/tc/doc/cls_u32.txt.
+http://lartc.org/howto/lartc.adv-filter.hashing.html
 
 
 =head1 AUTHOR

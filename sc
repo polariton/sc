@@ -183,6 +183,11 @@ my %cmdd = (
 		'desc'    => 'output version and copyright information',
 		'priv'    => 0,
 	},
+	'dbcreate' => {
+		'handler' => \&cmd_dbcreate,
+		'desc'    => 'create database and table',
+		'priv'    => 0,
+	},
 	'dbadd' => {
 		'handler' => \&cmd_dbadd,
 		'arg'     => '<ip> <rate>',
@@ -205,11 +210,6 @@ my %cmdd = (
 		'handler' => \&cmd_dbchange,
 		'arg'     => '<ip> <rate>',
 		'desc'    => 'change rate in the database',
-		'priv'    => 0,
-	},
-	'dbcreate' => {
-		'handler' => \&cmd_dbcreate,
-		'desc'    => 'create database and table',
 		'priv'    => 0,
 	},
 );
@@ -780,8 +780,12 @@ sub db_connect
 		$dbh = DBI->connect(
 			"DBI:CSV:",
 			$db_user, $db_pass, {
-				f_dir => $db_name, f_ext => ".csv/r", csv_sep_char => ";",
-				RaiseError => 1, PrintError => 1, AutoCommit => 1 }
+				f_dir => $db_name,
+				f_ext => ".csv",
+				csv_sep_char => ";",
+				csv_eol => "\n",
+				RaiseError => 1, PrintError => 1,
+				AutoCommit => 1 }
 		);
 	}
 	else {
@@ -1144,14 +1148,14 @@ sub shaper_dev_init
 	if ($default_policy eq 'block' || $default_policy eq 'block-all') {
 		$TC->(
 			"filter add dev $dev parent 1:0 protocol ip pref $pref_default ".
-			'u32 match u32 0 0 at 0 police mtu 1 drop'
+			'u32 match u32 0 0 at 0 '.
+			'action drop'
 		);
 	}
 	if ($default_policy eq 'pass') {
 		# add default class
 		$shaper_dev_add_class->($dev, $default_cid, $default_rate, $default_ceil);
 	}
-
 	return $?;
 }
 
@@ -1229,7 +1233,7 @@ sub htb_dev_change_class
 {
 	my ($dev, $cid, $rate, $ceil) = @_;
 	$TC->(
-		"class change dev $dev parent 1:0 classid 1:$cid htb ".
+		"class change dev $dev parent 1: classid 1:$cid htb ".
 		"rate $rate ceil $ceil quantum $quantum"
 	);
 	return $?;
@@ -1492,7 +1496,7 @@ sub policer_dev_init
 		$TC->(
 			"filter add dev $dev parent $ingress_cid: protocol ip ".
 			"pref $pref_default u32 match u32 0 0 at 0 ".
-			"police mtu 1 drop"
+			'action drop'
 		);
 	}
 	return $?;

@@ -1396,11 +1396,11 @@ sub shaper_dev_ip_show
 sub shaper_dev_show
 {
 	my ($dev) = @_;
-	print BOLD, "\nInput filters [$dev]:\n", RESET;
+	print BOLD, "\nINPUT FILTERS [$dev]:\n", RESET;
 	system "$tc -p -s filter show dev $dev";
-	print BOLD, "\nInput classes [$dev]:\n", RESET;
+	print BOLD, "\nINPUT CLASSES [$dev]:\n", RESET;
 	system "$tc -i -s -d class show dev $dev";
-	print BOLD, "\nInput qdiscs [$dev]:\n", RESET;
+	print BOLD, "\nINPUT QDISCS [$dev]:\n", RESET;
 	system "$tc -i -s -d qdisc show dev $dev";
 	return $?;
 }

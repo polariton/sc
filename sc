@@ -832,7 +832,6 @@ sub get_iface_ip
 	if (ioctl($socket, SIOCGIFADDR(), $buf) && (my @ip = unpack('x20 C4', $buf))) {
 		return join('.', @ip);
 	}
-	return undef;
 }
 
 #
@@ -2148,7 +2147,7 @@ hybrid.
 
 =head1 DEPENDENCIES
 
-DBI and corresponding database-dependent module (e.g. DBD::Pg for PostgreSQL,
+DBI and a corresponding database-dependent module (e.g. DBD::Pg for PostgreSQL,
 DBD::SQLite for SQLite, etc), AppConfig, Carp, Getopt::Long, Pod::Usage,
 Sys::Syslog, Term::ANSIColor.
 
@@ -2324,7 +2323,7 @@ disable usage of tc(8) batch rule loading
 
 =item B<3>
 
-do B<1> + B<2>
+do both B<1> and B<2>
 
 =back
 
@@ -2495,17 +2494,17 @@ gigabyte per second
 
 C<sc load> or C<sc start>
 
-=item Add class for IP 172.16.0.1 with 256kibit/s.
+=item Add class for IP 10.0.0.1 with 256kibit/s.
 
-C<sc add 172.16.0.1 256kibit>
+C<sc add 10.0.0.1 256kibit>
 
 =item Change rate to 512kibit/s
 
-C<sc change 172.16.0.1 512kibit>
+C<sc change 10.0.0.1 512kibit>
 
-=item Delete rules for 172.16.0.1
+=item Delete rules for 10.0.0.1
 
-C<sc del 172.16.0.1>
+C<sc del 10.0.0.1>
 
 =item Reset all rules
 
@@ -2569,13 +2568,10 @@ insufficient privileges
 =back
 
 
-=head1 BUGS
+=head1 RESTRICTIONS
 
 For performance reasons, script does not perform checks that require
 additional executions of external programs.
-
-
-=head1 RESTRICTIONS
 
 Due to limited number of classids (from 2 to ffff) you can create only 65534
 classes on a single interface.
@@ -2599,9 +2595,9 @@ Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 =head1 LICENSE AND COPYRIGHT
 
-Copyright (c) 2008-2014. Stanislav Kruchinin.
+Copyright (c) Stanislav Kruchinin.
 
-License: GNU GPL version 2 or later
+License: GNU GPL version 3 or later
 
 This is free software: you are free to change and redistribute it.
 There is NO WARRANTY; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR

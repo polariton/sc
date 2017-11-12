@@ -11,8 +11,8 @@ B<sc.conf> - configuration file for sc(8).
 
 =head1 DESCRIPTION
 
-The F<sc.conf> is parsed using C<AppConfig> module and has a simple C<variable
-= value> form.
+The F<sc.conf> file is parsed using the C<AppConfig> module and has a simple
+C<variable = value> form.
 Expansion for internal and environment variables is enabled (see AppConfig(3)
 for details).
 The file may contain extra tabs and newlines for formatting.
@@ -252,15 +252,15 @@ Default value: B<SQLite>.
 
 =item B<db_user>
 
-Username to use when connecting to database.
+Username to use when connecting to a database.
 
-Possible values: depends on database server.
+Possible values: depends on the database server.
 
 Default value: B<user>.
 
 =item B<db_pass>
 
-The password to use when connecting to database. Remember that specifying a
+The password to use when connecting to a database. Remember that specifying a
 password on the command line is insecure.
 
 Possible values: arbitrary string.
@@ -367,6 +367,4 @@ http://ace-host.stuart.id.au/russell/files/tc/doc/cls_u32.txt.
 Stanislav Kruchinin <stanislav.kruchinin@gmail.com>
 
 =cut
-
-# vim:set syntax=pod:
 

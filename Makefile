@@ -1,6 +1,6 @@
 PROG=sc
-VERSION=1.5.7
-ARCH=$(PROG)-$(VERSION).tar.bz2
+VERSION=1.5.8
+ARCH=$(PROG)-$(VERSION)
 SERVICE=$(PROG)
 
 PREFIX?=/usr/local
@@ -49,5 +49,7 @@ clean:
 	rm -f $(CLFILES)
 
 srcdist:
-	hg archive -t tbz2 -X .hgtags -X .hgignore -X .hg_archival.txt $(ARCH)
+	git archive --prefix=$(ARCH)/ --format=tar --output=$(ARCH).tar HEAD ;\
+	tar -f $(ARCH).tar --delete $(ARCH)/.gitignore ;\
+	bzip2 -9 $(ARCH).tar
 

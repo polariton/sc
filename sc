@@ -88,7 +88,7 @@ my $syslog_facility = 'user';
 #
 
 my $PROG = 'sc';
-our $VERSION = '1.5.7';
+our $VERSION = '1.5.8';
 my $VERSTR = "Shaper Control Tool (version $VERSION)";
 
 # command dispatch table

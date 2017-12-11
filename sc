@@ -40,7 +40,9 @@ my $batch = 0;
 my $joint = 0;
 
 my $o_if = 'eth0';
+my @o_ifs;
 my $i_if = 'eth1';
+my @i_ifs;
 my $o_if_enabled = 1;
 my $i_if_enabled = 1;
 my $if_disabled_keyword = 'disable';
@@ -413,15 +415,18 @@ sub main
 	set_filter_nets();
 	local $ENV{ANSI_COLORS_DISABLED} = 1 if !($colored && isatty(\*STDOUT));
 
-	$i_if_enabled = ($i_if ne $if_disabled_keyword);
+	$i_if_enabled = (nonempty($i_if) && $i_if ne $if_disabled_keyword);
 	if (!$i_if_enabled && $limit_method eq 'hybrid') {
 		log_croak("in_if must be enabled for hybrid rate limiting method");
 	}
 
-	$o_if_enabled = ($o_if ne $if_disabled_keyword);
+	$o_if_enabled = (nonempty($o_if) && $o_if ne $if_disabled_keyword);
 	if (!$i_if_enabled && !$o_if_enabled) {
 		log_croak("at least one of the interfaces must be enabled");
 	}
+
+	@i_ifs = split /\ /xms, $i_if;
+	@o_ifs = split /\ /xms, $o_if;
 
 	# call main handler
 	shift @args;
@@ -1058,8 +1063,17 @@ sub u32_div_hmask
 sub shaper_init
 {
 	my $ret = E_OK;
-	$ret = shaper_dev_init($i_if, 'dst', 16) if $i_if_enabled;
-	$ret = shaper_dev_init($o_if, 'src', 12) if $o_if_enabled;
+
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = shaper_dev_init($dev, 'dst', 16);
+		}
+	}
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = shaper_dev_init($dev, 'src', 12);
+		}
+	}
 	return $ret;
 }
 
@@ -1164,10 +1178,16 @@ sub shaper_add
 	my $ret = E_OK;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-	$ret = shaper_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key)
-		if $i_if_enabled;
-	$ret = shaper_dev_add($o_if, $cid, $rate, $ceil, "ip src $ip", $ht, $key)
-		if $o_if_enabled;
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = shaper_dev_add($dev, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+		}
+	}
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = shaper_dev_add($dev, $cid, $rate, $ceil, "ip src $ip", $ht, $key);
+		}
+	}
 	return $ret;
 }
 
@@ -1223,8 +1243,16 @@ sub shaper_change
 	my ($ip, $cid, $rate) = @_;
 	my $ceil = $rate;
 	my $ret = E_OK;
-	$ret = $shaper_dev_change_class->($i_if, $cid, $rate, $ceil) if $i_if_enabled;
-	$ret = $shaper_dev_change_class->($o_if, $cid, $rate, $ceil) if $o_if_enabled;
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = $shaper_dev_change_class->($dev, $cid, $rate, $ceil);
+		}
+	}
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = $shaper_dev_change_class->($dev, $cid, $rate, $ceil);
+		}
+	}
 	return $ret;
 }
 
@@ -1253,8 +1281,16 @@ sub shaper_del
 	my ($ip, $cid) = @_;
 	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-	$ret = shaper_dev_del($i_if, $cid, $ht, $key) if $i_if_enabled;
-	$ret = shaper_dev_del($o_if, $cid, $ht, $key) if $o_if_enabled;
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = shaper_dev_del($dev, $cid, $ht, $key);
+		}
+	}
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = shaper_dev_del($dev, $cid, $ht, $key);
+		}
+	}
 	return $ret;
 }
 
@@ -1291,8 +1327,8 @@ sub shaper_load
 	my $leaf_regexp;
 	my $dev;
 
-	$dev = $o_if if $o_if_enabled;
-	$dev = $i_if if $i_if_enabled;
+	$dev = $o_ifs[0] if ($o_if_enabled);
+	$dev = $i_ifs[0] if ($i_if_enabled);
 
 	open my $TCFH, '-|', "$tc -p -iec filter show dev $dev"
 		or log_croak("unable to open pipe for $tc");
@@ -1336,8 +1372,8 @@ sub shaper_show
 	my ($dev, $cid);
 	my $ret = E_OK;
 
-	$dev = $o_if if $o_if_enabled;
-	$dev = $i_if if $i_if_enabled;
+	$dev = $o_ifs[0] if $o_if_enabled;
+	$dev = $i_ifs[0] if $i_if_enabled;
 
 	if (nonempty($ips[0])) {
 		for my $ip (@ips) {
@@ -1352,10 +1388,16 @@ sub shaper_show
 				if ($tcout[$i] =~ /match\ IP\ .*\ $ip/xms) {
 					if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
 						print BOLD, "TC rules for $ip\n\n", RESET;
-						$ret = shaper_dev_ip_show($i_if, 'Input',  $ip, $cid)
-							if $i_if_enabled;
-						$ret = shaper_dev_ip_show($o_if, 'Output', $ip, $cid)
-							if $o_if_enabled;
+						if ($i_if_enabled) {
+							for $dev (@i_ifs) {
+								$ret = shaper_dev_ip_show($dev, 'Input',  $ip, $cid);
+							}
+						}
+						if ($o_if_enabled) {
+							for $dev (@o_ifs) {
+								$ret = shaper_dev_ip_show($dev, 'Output', $ip, $cid);
+							}
+						}
 						print "\n";
 						last;
 					}
@@ -1364,8 +1406,16 @@ sub shaper_show
 		}
 	}
 	else {
-		$ret = shaper_dev_show($i_if) if $i_if_enabled;
-		$ret = shaper_dev_show($o_if) if $o_if_enabled;
+		if ($i_if_enabled) {
+			for $dev (@i_ifs) {
+				$ret = shaper_dev_show($dev);
+			}
+		}
+		if ($o_if_enabled) {
+			for $dev (@o_ifs) {
+				$ret = shaper_dev_show($dev);
+			}
+		}
 	}
 	return $ret;
 }
@@ -1406,8 +1456,17 @@ sub shaper_dev_show
 
 sub shaper_reset
 {
-	$sys->("$tc qdisc del dev $o_if root handle 1: $root_qdisc") if $o_if_enabled;
-	$sys->("$tc qdisc del dev $i_if root handle 1: $root_qdisc") if $i_if_enabled;
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$sys->("$tc qdisc del dev $dev root handle 1: $root_qdisc");
+		}
+	}
+
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$sys->("$tc qdisc del dev $i_if root handle 1: $root_qdisc");
+		}
+	}
 	return $?;
 }
 
@@ -1416,8 +1475,16 @@ sub shaper_reset
 sub policer_init
 {
 	my $ret = E_OK;
-	$ret = policer_dev_init($o_if, 'dst', 16) if $o_if_enabled;
-	$ret = policer_dev_init($i_if, 'src', 12) if $i_if_enabled;
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = policer_dev_init($o_if, 'dst', 16);
+		}
+	}
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = policer_dev_init($i_if, 'src', 12);
+		}
+	}
 	return $ret;
 }
 
@@ -1508,10 +1575,16 @@ sub policer_add
 	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
 
-	$ret = policer_dev_add($o_if, $rate, $ceil, "ip dst $ip", $ht, $key)
-		if $o_if_enabled;
-	$ret = policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key)
-		if $i_if_enabled;
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = policer_dev_add($dev, $rate, $ceil, "ip dst $ip", $ht, $key);
+		}
+	}
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = policer_dev_add($dev, $rate, $ceil, "ip src $ip", $ht, $key);
+		}
+	}
 	return $ret;
 }
 
@@ -1535,8 +1608,16 @@ sub policer_del
 	my ($ip, $cid) = @_;
 	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-	$ret = policer_dev_del($i_if, $ht, $key) if $i_if_enabled;
-	$ret = policer_dev_del($o_if, $ht, $key) if $o_if_enabled;
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$ret = policer_dev_del($i_if, $ht, $key);
+		}
+	}
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$ret = policer_dev_del($o_if, $ht, $key);
+		}
+	}
 	return $ret;
 }
 
@@ -1557,8 +1638,8 @@ sub policer_load
 	my $ret = E_OK;
 	my $dev;
 
-	$dev = $o_if if $o_if_enabled;
-	$dev = $i_if if $i_if_enabled;
+	$dev = $o_ifs[0] if $o_if_enabled;
+	$dev = $i_ifs[0] if $i_if_enabled;
 
 	open my $TCFH, '-|', "$tc -p -iec filter show dev $dev parent $ingress_cid:"
 		or log_croak("unable to open pipe for $tc");
@@ -1586,13 +1667,29 @@ sub policer_show
 	if (nonempty($ips[0])) {
 		for my $ip (@ips) {
 			arg_check(\&is_ip, $ip, 'IP');
-			policer_dev_ip_show($i_if, 'Input',  $ip) if $i_if_enabled;
-			policer_dev_ip_show($o_if, 'Output', $ip) if $o_if_enabled;
+			if ($i_if_enabled) {
+				for my $dev (@i_ifs) {
+					policer_dev_ip_show($dev, 'Input',  $ip);
+				}
+			}
+			if ($o_if_enabled) {
+				for my $dev (@o_ifs) {
+					policer_dev_ip_show($dev, 'Output', $ip);
+				}
+			}
 		}
 	}
 	else {
-		$ret = policer_dev_show($i_if) if $i_if_enabled;
-		$ret = policer_dev_show($o_if) if $o_if_enabled;
+		if ($i_if_enabled) {
+			for my $dev (@i_ifs) {
+				$ret = policer_dev_show($dev);
+			}
+		}
+		if ($o_if_enabled) {
+			for my $dev (@o_ifs) {
+				$ret = policer_dev_show($dev);
+			}
+		}
 	}
 	return $ret;
 }
@@ -1630,10 +1727,16 @@ sub policer_dev_show
 
 sub policer_reset
 {
-	$sys->("$tc qdisc del dev $o_if handle $ingress_cid: ingress")
-		if $o_if_enabled;
-	$sys->("$tc qdisc del dev $i_if handle $ingress_cid: ingress")
-		if $i_if_enabled;
+	if ($o_if_enabled) {
+		for my $dev (@o_ifs) {
+			$sys->("$tc qdisc del dev $dev handle $ingress_cid: ingress");
+		}
+	}
+	if ($i_if_enabled) {
+		for my $dev (@i_ifs) {
+			$sys->("$tc qdisc del dev $dev handle $ingress_cid: ingress");
+		}
+	}
 	return $?;
 }
 
@@ -1642,8 +1745,10 @@ sub policer_reset
 sub hybrid_init
 {
 	my $ret = E_OK;
-	$ret = policer_dev_init($i_if, 'src', 12);
-	$ret = shaper_dev_init($i_if, 'dst', 16);
+	for my $dev (@i_ifs) {
+		$ret = policer_dev_init($dev, 'src', 12);
+		$ret = shaper_dev_init($dev, 'dst', 16);
+	}
 	return $ret;
 }
 
@@ -1653,8 +1758,11 @@ sub hybrid_add
 	my $ceil = $rate;
 	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-	$ret = policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
-	$ret = shaper_dev_add($i_if, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+
+	for my $dev (@i_ifs) {
+		$ret = policer_dev_add($dev, $rate, $ceil, "ip src $ip", $ht, $key);
+		$ret = shaper_dev_add($dev, $cid, $rate, $ceil, "ip dst $ip", $ht, $key);
+	}
 	return $ret;
 }
 
@@ -1663,8 +1771,11 @@ sub hybrid_del
 	my ($ip, $cid) = @_;
 	my $ret = E_OK;
 	my ($ht, $key) = ip_leafht_key($ip);
-	$ret = policer_dev_del($i_if, $ht, $key);
-	$ret = shaper_dev_del($i_if, $cid, $ht, $key);
+
+	for my $dev (@i_ifs) {
+		$ret = policer_dev_del($dev, $ht, $key);
+		$ret = shaper_dev_del($dev, $cid, $ht, $key);
+	}
 	return $ret;
 }
 
@@ -1674,8 +1785,11 @@ sub hybrid_change
 	my $ret = E_OK;
 	my $ceil = $rate;
 	my ($ht, $key) = ip_leafht_key($ip);
-	$ret = policer_dev_add($i_if, $rate, $ceil, "ip src $ip", $ht, $key);
-	$ret = $shaper_dev_change_class->($i_if, $cid, $rate, $ceil);
+
+	for my $dev (@i_ifs) {
+		$ret = policer_dev_add($dev, $rate, $ceil, "ip src $ip", $ht, $key);
+		$ret = $shaper_dev_change_class->($dev, $cid, $rate, $ceil);
+	}
 	return $ret;
 }
 
@@ -1689,64 +1803,68 @@ sub hybrid_show
 			my $cid;
 			my @tcout;
 
-			open my $TCFH, '-|',
-				"$tc -p -s -iec filter show dev $i_if parent $ingress_cid:"
-					or log_croak("unable to open pipe for $tc");
-			@tcout = <$TCFH>;
-			close $TCFH or log_carp("unable to close pipe for $tc");
-			for my $i (0 .. $#tcout) {
-				chomp $tcout[$i];
-				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
-					print BOLD, "TC rules for $ip\n\n",
-					            "Policing filter [$i_if]:\n", RESET;
-					for my $j ($i-1 .. $i+1) {
-						print "$tcout[$j]";
-					}
-					last;
-				}
-			}
-
-			open $TCFH, '-|', "$tc -p -s filter show dev $i_if"
-				or log_croak("unable to open pipe for $tc");
-			@tcout = <$TCFH>;
-			close $TCFH or log_carp("unable to close pipe for $tc");
-			for my $i (0 .. $#tcout) {
-				chomp $tcout[$i];
-				if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
-					if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
-						print BOLD, "Input filter [$i_if]:\n", RESET;
-						print "$tcout[$i-1]\n$tcout[$i]\n";
-						print_rules(
-							"\nShaping filter [$i_if]:",
-							"$tc -p -s filter show dev $i_if | ".
-							"grep -w -B 1 \"match IP dst $ip/32\""
-						);
-						print_rules(
-							"\nShaping class [$i_if]:",
-							"$tc -i -s -d class show dev $i_if | ".
-							"grep -w -A 3 \"leaf $cid\:\""
-						);
-						print_rules(
-							"\nShaping qdisc [$i_if]:",
-							"$tc -i -s -d qdisc show dev $i_if | ".
-							"grep -w -A 2 \"$cid\: parent 1:$cid\""
-						);
-						print "\n";
+			for my $dev (@i_ifs) {
+				open my $TCFH, '-|',
+					"$tc -p -s -iec filter show dev $dev parent $ingress_cid:"
+						or log_croak("unable to open pipe for $tc");
+				@tcout = <$TCFH>;
+				close $TCFH or log_carp("unable to close pipe for $tc");
+				for my $i (0 .. $#tcout) {
+					chomp $tcout[$i];
+					if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+						print BOLD, "TC rules for $ip\n\n",
+									"Policing filter [$dev]:\n", RESET;
+						for my $j ($i-1 .. $i+1) {
+							print "$tcout[$j]";
+						}
 						last;
+					}
+				}
+
+				open $TCFH, '-|', "$tc -p -s filter show dev $dev"
+					or log_croak("unable to open pipe for $tc");
+				@tcout = <$TCFH>;
+				close $TCFH or log_carp("unable to close pipe for $tc");
+				for my $i (0 .. $#tcout) {
+					chomp $tcout[$i];
+					if ($tcout[$i] =~ /match\ IP\ .*\ $ip\/32/xms) {
+						if (($cid) = $tcout[$i-1] =~ /flowid\ 1:([0-9a-f]+)/xms) {
+							print BOLD, "Input filter [$dev]:\n", RESET;
+							print "$tcout[$i-1]\n$tcout[$i]\n";
+							print_rules(
+								"\nShaping filter [$dev]:",
+								"$tc -p -s filter show dev $dev | ".
+								"grep -w -B 1 \"match IP dst $ip/32\""
+							);
+							print_rules(
+								"\nShaping class [$dev]:",
+								"$tc -i -s -d class show dev $dev | ".
+								"grep -w -A 3 \"leaf $cid\:\""
+							);
+							print_rules(
+								"\nShaping qdisc [$dev]:",
+								"$tc -i -s -d qdisc show dev $dev | ".
+								"grep -w -A 2 \"$cid\: parent 1:$cid\""
+							);
+							print "\n";
+							last;
+						}
 					}
 				}
 			}
 		}
 	}
 	else {
-		print BOLD, "\nPOLICING FILTERS [$i_if]:\n", RESET;
-		system "$tc -p -s filter show dev $i_if parent $ingress_cid:";
-		print BOLD, "\nSHAPING FILTERS [$i_if]:\n", RESET;
-		system "$tc -p -s filter show dev $i_if";
-		print BOLD, "\nSHAPING CLASSES [$i_if]:\n", RESET;
-		system "$tc -i -s -d class show dev $i_if";
-		print BOLD, "\nSHAPING QDISCS [$i_if]:\n", RESET;
-		system "$tc -i -s -d qdisc show dev $i_if";
+		for my $dev (@i_ifs) {
+			print BOLD, "\nPOLICING FILTERS [$dev]:\n", RESET;
+			system "$tc -p -s filter show dev $dev parent $ingress_cid:";
+			print BOLD, "\nSHAPING FILTERS [$dev]:\n", RESET;
+			system "$tc -p -s filter show dev $dev";
+			print BOLD, "\nSHAPING CLASSES [$dev]:\n", RESET;
+			system "$tc -i -s -d class show dev $dev";
+			print BOLD, "\nSHAPING QDISCS [$dev]:\n", RESET;
+			system "$tc -i -s -d qdisc show dev $dev";
+		}
 		return $?;
 	}
 	return $?;
@@ -1754,8 +1872,10 @@ sub hybrid_show
 
 sub hybrid_reset
 {
-	$sys->("$tc qdisc del dev $i_if handle $ingress_cid: ingress");
-	$sys->("$tc qdisc del dev $i_if root handle 1: $root_qdisc");
+	for my $dev (@i_ifs) {
+		$sys->("$tc qdisc del dev $dev handle $ingress_cid: ingress");
+		$sys->("$tc qdisc del dev $dev root handle 1: $root_qdisc");
+	}
 	return $?;
 }
 
@@ -1913,8 +2033,8 @@ sub cmd_show
 sub cmd_status
 {
 	my $dev;
-	$dev = $o_if if $o_if_enabled;
-	$dev = $i_if if $i_if_enabled;
+	$dev = $o_ifs[0] if $o_if_enabled;
+	$dev = $i_ifs[0] if $i_if_enabled;
 
 	my @out;
 	my $PIPE;

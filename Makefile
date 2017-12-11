@@ -15,11 +15,11 @@ CLFILES?=$(PROG).8 $(PROG).conf.5 $(ARCH) *.batch
 man: $(PROG).8 $(PROG).conf.5
 
 $(PROG).8: $(PROG)
-	pod2man --section=8 --release=" " \
+	pod2man --section=8 --release="$(VERSION)" \
 		--center="Linux System Manager's Manual" $^ > $@
 
 $(PROG).conf.5: $(PROG).conf.pod
-	pod2man --section=5 --release=" " --center=" " $^ > $@
+	pod2man --section=5 --release="$(VERSION)" --center=" " $^ > $@
 
 help:
 	@echo "Targets:" ;\
